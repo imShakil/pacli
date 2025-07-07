@@ -28,7 +28,7 @@ Commands:
 ## Install
 
 ```sh
-pip install pacli
+pip install pacli-tool
 ```
 
 ## Display Format
