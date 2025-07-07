@@ -1,0 +1,36 @@
+[project]
+name = "pacli"
+version = "1.0.0"
+description = "A secure CLI to manage secrets locally with encryption, master password, and clipboard support."
+readme = "README.md"
+authors = [
+    { name = "Mobarak Hosen Shakil", email = "mh.ice.iu@gmail.com" }
+]
+license = { file = "LICENSE" }
+requires-python = ">=3.7"
+dependencies = [
+    "cryptography",
+    "click",
+    "pyperclip"
+]
+keywords = ["cli", "secrets", "encryption", "password", "token", "clipboard", "security"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Utilities"
+]
+
+[project.urls]
+Homepage = "https://github.com/imshakil/pacli"
+Issues = "https://github.com/imshakil/pacli/issues"
+
+[project.scripts]
+pacli = "pacli.cli:cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
