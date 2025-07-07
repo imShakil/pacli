@@ -1,5 +1,5 @@
 [project]
-name = "pacli"
+name = "pacli-tool"
 version = "1.0.0"
 description = "A secure CLI to manage secrets locally with encryption, master password, and clipboard support."
 readme = "README.md"
