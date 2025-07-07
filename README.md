@@ -1,44 +1,69 @@
-# 🔐 pacli - Your Personal Secrets Managment CLI
+# 🔐 pacli - Personal Secrets Management CLI
 
-This is a simple CLI tool to help for managing secrets locally with focusing on high privacy concerns. Biggest disadvantage of using online tool is that sometimes their password got stolen by hackaers that causes your password leaked and available on the internet.
+**pacli** is a simple, privacy-focused CLI tool for managing your secrets locally. Unlike online password managers, pacli keeps your sensitive information on your device, reducing the risk of leaks from server breaches or hacks.
 
-## Available Commands
+## Features
 
-```command
-❯ pacli --help
-Usage: pacli [OPTIONS] COMMAND [ARGS]...
+- Securely store and manage secrets locally
+- Master password protection
+- support separate option for token and password
+- Add, retrieve, update, and delete secrets
+- Copy secrets directly to your clipboard
+- Easy-to-use command-line interface
 
-  🔐 pacli - Personal Access CLI for managing secrets...
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  add                Add a secret with LABEL.
-  change-master-key  Change the master password wihtout losing existing...
-  delete             Delete a secret by LABEL.
-  delete-by-id       Delete a secret by its ID.
-  get                Retrieve secrets by LABEL.
-  get-by-id          Retrieve a secret by its ID.
-  init               Initialize pacli and set a master password.
-  list               List all saved secrets.
-  version            Show the current version of pacli.
-```
-
-## Install
+## Installation
 
 ```sh
 pip install pacli-tool
 ```
 
+## Usage
+
+To see all available commands and options:
+
+```sh
+pacli --help
+```
+
+### Common Commands
+
+| Command                | Description                                      |
+|------------------------|--------------------------------------------------|
+| `init`                 | Initialize pacli and set a master password        |
+| `add`                  | Add a secret with a label                        |
+| `get`                  | Retrieve secrets by label                        |
+| `get-by-id`            | Retrieve a secret by its ID                      |
+| `list`                 | List all saved secrets                           |
+| `delete`               | Delete a secret by label                         |
+| `delete-by-id`         | Delete a secret by its ID                        |
+| `change-master-key`    | Change the master password without losing data   |
+| `version`              | Show the current version of pacli                |
+
+### Example: Adding and Retrieving a Secret
+
+```sh
+# Initialize pacli (run once)
+pacli init
+
+# Add a new secret
+pacli add --pass github
+
+# Retrieve a secret
+pacli get github
+```
+
 ## Display Format
 
-- For credential: `username:password`
+- Credentials are shown as: `username:password`
 
-## Copy Into Clipboard
+## Copy to Clipboard
 
-To copy secrets directly into clipboard use `--clip` option. Example:
+To copy a secret directly to your clipboard, use the `--clip` option:
 
 ```sh
 pacli get google --clip
 ```
+
+---
+
+For more information, use `pacli --help` or see the documentation.
