@@ -1,6 +1,6 @@
 [project]
 name = "pacli-tool"
-version = "1.0.0"
+dynamic = ["version"]
 description = "A secure CLI to manage secrets locally with encryption, master password, and clipboard support."
 readme = "README.md"
 authors = [
@@ -32,5 +32,9 @@ Issues = "https://github.com/imshakil/pacli/issues"
 pacli = "pacli.cli:cli"
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"

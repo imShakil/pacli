@@ -5,9 +5,10 @@ import pyperclip
 from getpass import getpass
 from .store import SecretStore
 from .log import get_logger
+from . import __version__
 
 logger = get_logger("pacli.cli")
-VERSION = "1.0.0"
+VERSION = __version__
 
 
 @click.group()
