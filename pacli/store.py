@@ -34,20 +34,18 @@ class SecretStore:
         db_path = os.path.expanduser(db_path)
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.conn = sqlite3.connect(db_path)
-        # Add id column as primary key if not exists, and add creation_time and update_time columns
         self.conn.execute(
             """CREATE TABLE IF NOT EXISTS secrets
                              (id TEXT PRIMARY KEY, label TEXT, value_encrypted TEXT, type TEXT, creation_time INTEGER, update_time INTEGER)"""
         )
-        # Migrate old table if needed
-        try:
-            self.conn.execute("SELECT creation_time FROM secrets LIMIT 1")
-        except sqlite3.OperationalError:
-            self.conn.execute("ALTER TABLE secrets ADD COLUMN creation_time INTEGER")
-        try:
-            self.conn.execute("SELECT update_time FROM secrets LIMIT 1")
-        except sqlite3.OperationalError:
-            self.conn.execute("ALTER TABLE secrets ADD COLUMN update_time INTEGER")
+        # try:
+        #     self.conn.execute("SELECT creation_time FROM secrets LIMIT 1")
+        # except sqlite3.OperationalError:
+        #     self.conn.execute("ALTER TABLE secrets ADD COLUMN creation_time INTEGER")
+        # try:
+        #     self.conn.execute("SELECT update_time FROM secrets LIMIT 1")
+        # except sqlite3.OperationalError:
+        #     self.conn.execute("ALTER TABLE secrets ADD COLUMN update_time INTEGER")
         self.fernet = None
 
     def is_master_set(self):
@@ -66,6 +64,12 @@ class SecretStore:
         self.fernet = self._derive_fernet(pw1, salt)
         SecretStore._session_fernet = self.fernet
         logger.info("Master password set.")
+
+    def update_master_password(self, new_password):
+        salt = get_salt()
+        self.fernet = self._derive_fernet(new_password, salt)
+        SecretStore._session_fernet = self.fernet
+        logger.info("Master password updated...")
 
     def _derive_fernet(self, password, salt):
         kdf = PBKDF2HMAC(
