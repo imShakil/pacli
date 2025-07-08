@@ -1,6 +1,11 @@
-# 🔐 pacli - Personal Secrets Management CLI
+# 🔐 pacli - Secrets Management CLI
+<p align="center" width="100%">
+  <img height="60%" src="https://github.com/user-attachments/assets/925c63ac-2a6c-4455-a69f-6ae9926fa2a8" />
+  <br />
+  <strong>pacli</strong> is a simple, privacy-focused CLI tool for managing your secrets locally. Unlike online password managers, pacli keeps your sensitive information on your device, reducing the risk of leaks from server breaches or hacks.
+</p>
 
-**pacli** is a simple, privacy-focused CLI tool for managing your secrets locally. Unlike online password managers, pacli keeps your sensitive information on your device, reducing the risk of leaks from server breaches or hacks.
+___
 
 ## Features
 
