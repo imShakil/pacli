@@ -37,8 +37,37 @@ jobs:
             - name: Checkout Release.txt
               run: cat release.txt
             - name: Create Github Release
+              id: gh-release
               uses: softprops/action-gh-release@v2
               with:
                 files: release.txt
                 tag_name: ${{ github.ref_name }}
                 token: ${{ secrets.GH_TOKEN }}
+            - name: Upload distributions              
+              uses: actions/upload-artifact@v4
+              with:
+                name: release-dists
+                path: dist/
+
+    pypi-publish:
+        runs-on: ubuntu-latest
+        needs:
+            - release
+        permissions:
+            id-token: write
+    
+        environment:
+            name: pypi
+            url: https://pypi.org/project/pacli-tool/
+    
+        steps:
+            - name: Retrieve release distributions
+              uses: actions/download-artifact@v4
+              with:
+                name: release-dists
+                path: dist/
+    
+            - name: Publish release distributions to PyPI
+              uses: pypa/gh-action-pypi-publish@release/v1
+              with:
+                packages-dir: dist/
