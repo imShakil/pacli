@@ -51,6 +51,7 @@ jobs:
               with:
                 files: release.txt
                 tag_name: ${{ github.ref_name }}
+                generate_release_notes: true
 
     pypi-publish:
         runs-on: ubuntu-latest
