@@ -41,3 +41,4 @@ jobs:
               with:
                 files: release.txt
                 tag_name: ${{ github.ref_name }}
+                token: ${{ secrets.GH_TOKEN }}
