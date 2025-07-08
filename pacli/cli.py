@@ -178,13 +178,6 @@ def delete(label):
 def change_master_key():
     """Change the master password wihtout losing existing secrets."""
     store = SecretStore()
-    if not store.is_master_set():
-        click.echo("❌ Master password not set. Run 'pacli init' first.")
-        return
-    old_password = getpass("🔐 Enter old master password: ")
-    if not store.verify_master_password(old_password):
-        click.echo("❌ Old master password is incorrect.")
-        return
     store.require_fernet()  # Ensures old key is loaded
     all_secrets = []
     for row in store.conn.execute("SELECT id, value_encrypted FROM secrets"):
@@ -202,7 +195,7 @@ def change_master_key():
         click.echo("❌ Passwords do not match or are empty. Aborting.")
         return
 
-    store.set_master_password(new_password)
+    store.update_master_password(new_password)
     store.require_fernet()  # Ensures new key is loaded
     for sid, plain in all_secrets:
         encrypted = store.fernet.encrypt(plain.encode()).decode()
