@@ -42,7 +42,7 @@ jobs:
               with:
                 files: release.txt
                 tag_name: ${{ github.ref_name }}
-                token: ${{ secrets.GH_TOKEN }}
+
             - name: Upload distributions              
               uses: actions/upload-artifact@v4
               with:
