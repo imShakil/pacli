@@ -2,7 +2,11 @@ name: Release with Tag
 
 on:
     push: 
-        tags: v[0-9]+.[0-9]+.[0-9]+
+        tags:
+            - "v*.*.*"
+
+permissions: 
+    contents: write
 
 jobs:
     release:
@@ -28,7 +32,12 @@ jobs:
             - name: Test with pytest
               run: |
                 pytest
+            - name: Create Release.txt
+              run: echo ${{ github.sha }} > release.txt
+            - name: Checkout Release.txt
+              run: cat release.txt
             - name: Create Github Release
               uses: softprops/action-gh-release@v2
               with:
+                files: release.txt
                 tag_name: ${{ github.ref_name }}
