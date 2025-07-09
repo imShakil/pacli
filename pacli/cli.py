@@ -29,7 +29,8 @@ def init():
     store = SecretStore()
     if store.is_master_set():
         click.echo(
-            "Master password is already set. If you want to reset, delete ~/.config/pacli/salt.bin and run this command again."
+            "Master password is already set. If you want to reset, "
+            + "delete ~/.config/pacli/salt.bin and run this command again."
         )
         return
     store.set_master_password()
@@ -37,9 +38,7 @@ def init():
 
 
 @cli.command()
-@click.option(
-    "--token", is_flag=True, help="Use this flag to store a token instead of a secret."
-)
+@click.option("--token", is_flag=True, help="Use this flag to store a token instead of a secret.")
 @click.option(
     "--pass",
     "password_flag",
@@ -79,9 +78,7 @@ def add(ctx, token, password_flag, label, arg1, arg2):
 
 @cli.command()
 @click.argument("label")
-@click.option(
-    "--clip", is_flag=True, help="Copy the secret to clipboard instead of printing."
-)
+@click.option("--clip", is_flag=True, help="Copy the secret to clipboard instead of printing.")
 def get(label, clip):
     """Retrieve secrets by LABEL. Use --clip to copy to clipboard."""
     store = SecretStore()
@@ -127,16 +124,8 @@ def list():
     click.echo(f"{'ID':10}  {'Label':33}  {'Type':10}  {'Created':20}  {'Updated':20}")
     click.echo("-" * 100)
     for sid, label, stype, ctime, utime in secrets:
-        cstr = (
-            datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M:%S")
-            if ctime
-            else ""
-        )
-        ustr = (
-            datetime.datetime.fromtimestamp(utime).strftime("%Y-%m-%d %H:%M:%S")
-            if utime
-            else ""
-        )
+        cstr = datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M:%S") if ctime else ""
+        ustr = datetime.datetime.fromtimestamp(utime).strftime("%Y-%m-%d %H:%M:%S") if utime else ""
         click.echo(f"{sid:10}  {label:33}  {stype:10}  {cstr:20}  {ustr:20}")
 
 
@@ -186,7 +175,7 @@ def change_master_key():
             all_secrets.append((row[0], decrypted))
         except Exception as e:
             logger.error(f"Failed to decrypt secret {row[0]}: {e}")
-            click.echo(f"❌ Failed to decrypt a secret. Aborting master key change.")
+            click.echo("❌ Failed to decrypt a secret. Aborting master key change.")
             return
 
     new_password = getpass("🔐 Enter new master password: ")
@@ -199,9 +188,7 @@ def change_master_key():
     store.require_fernet()  # Ensures new key is loaded
     for sid, plain in all_secrets:
         encrypted = store.fernet.encrypt(plain.encode()).decode()
-        store.conn.execute(
-            "UPDATE secrets SET value_encrypted = ? WHERE id = ?", (encrypted, sid)
-        )
+        store.conn.execute("UPDATE secrets SET value_encrypted = ? WHERE id = ?", (encrypted, sid))
     store.conn.commit()
     logger.info("Master password changed and all secrets re-encrypted.")
     click.echo("✅ Master password changed and all secrets re-encrypted.")
@@ -209,9 +196,7 @@ def change_master_key():
 
 @cli.command()
 @click.argument("id", required=True)
-@click.option(
-    "--clip", is_flag=True, help="Copy the secret to clipboard instead of printing."
-)
+@click.option("--clip", is_flag=True, help="Copy the secret to clipboard instead of printing.")
 def get_by_id(id, clip):
     """Retrieve a secret by its ID."""
     store = SecretStore()
@@ -263,22 +248,14 @@ def choice_one(label, matches):
     click.echo(f"Multiple secrets found for label '{label}':")
     for idx, s in enumerate(matches, 1):
         cstr = (
-            datetime.datetime.fromtimestamp(s["creation_time"]).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            datetime.datetime.fromtimestamp(s["creation_time"]).strftime("%Y-%m-%d %H:%M:%S")
             if s["creation_time"]
             else ""
         )
         ustr = (
-            datetime.datetime.fromtimestamp(s["update_time"]).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-            if s["update_time"]
-            else ""
+            datetime.datetime.fromtimestamp(s["update_time"]).strftime("%Y-%m-%d %H:%M:%S") if s["update_time"] else ""
         )
-        click.echo(
-            f"[{idx}] ID: {s['id']}  Type: {s['type']}  Created: {cstr}  Updated: {ustr}"
-        )
+        click.echo(f"[{idx}] ID: {s['id']}  Type: {s['type']}  Created: {cstr}  Updated: {ustr}")
     while True:
         choice = click.prompt("Select which secret to retrieve (number)", type=int)
         if 1 <= choice <= len(matches):
@@ -294,8 +271,6 @@ def copy_to_clipboard(secret):
         pyperclip.copy(secret)
         click.echo("📋 Secret copied to clipboard.")
     except ImportError:
-        click.echo(
-            "❌ pyperclip is not installed. Run 'pip install pyperclip' to enable clipboard support."
-        )
+        click.echo("❌ pyperclip is not installed. Run 'pip install pyperclip' to enable clipboard support.")
     except Exception as e:
         click.echo(f"❌ Failed to copy to clipboard: {e}")

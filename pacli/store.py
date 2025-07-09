@@ -35,17 +35,17 @@ class SecretStore:
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.conn = sqlite3.connect(db_path)
         self.conn.execute(
-            """CREATE TABLE IF NOT EXISTS secrets
-                             (id TEXT PRIMARY KEY, label TEXT, value_encrypted TEXT, type TEXT, creation_time INTEGER, update_time INTEGER)"""
+            """
+            CREATE TABLE IF NOT EXISTS secrets (
+                id TEXT PRIMARY KEY,
+                label TEXT,
+                value_encrypted TEXT,
+                type TEXT,
+                creation_time INTEGER,
+                update_time INTEGER
+            )
+            """
         )
-        # try:
-        #     self.conn.execute("SELECT creation_time FROM secrets LIMIT 1")
-        # except sqlite3.OperationalError:
-        #     self.conn.execute("ALTER TABLE secrets ADD COLUMN creation_time INTEGER")
-        # try:
-        #     self.conn.execute("SELECT update_time FROM secrets LIMIT 1")
-        # except sqlite3.OperationalError:
-        #     self.conn.execute("ALTER TABLE secrets ADD COLUMN update_time INTEGER")
         self.fernet = None
 
     def is_master_set(self):
@@ -101,7 +101,8 @@ class SecretStore:
         now = int(time.time())
         new_id = uuid.uuid4().hex[:8]  # 8-character unique ID
         self.conn.execute(
-            "INSERT INTO secrets (id, label, value_encrypted, type, creation_time, update_time) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO secrets (id, label, value_encrypted, type, creation_time, update_time) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (new_id, label, encrypted, secret_type, now, now),
         )
         self.conn.commit()
@@ -110,7 +111,7 @@ class SecretStore:
         self.require_fernet()
         try:
             cursor = self.conn.execute(
-                "SELECT value_encrypted, type FROM secrets WHERE label = ? ORDER BY rowid DESC LIMIT 1",
+                "SELECT value_encrypted, type FROM secrets WHERE label = ? " "ORDER BY rowid DESC LIMIT 1",
                 (label,),
             )
             row = cursor.fetchone()
@@ -131,9 +132,7 @@ class SecretStore:
     def list_secrets(self):
         return [
             (row[0], row[1], row[2], row[3], row[4])
-            for row in self.conn.execute(
-                "SELECT id, label, type, creation_time, update_time FROM secrets"
-            )
+            for row in self.conn.execute("SELECT id, label, type, creation_time, update_time FROM secrets")
         ]
 
     def delete_secret(self, id):
@@ -144,7 +143,7 @@ class SecretStore:
     def get_secret_by_id(self, id):
         self.require_fernet()
         cursor = self.conn.execute(
-            "SELECT label, value_encrypted, type, creation_time, update_time FROM secrets WHERE id = ?",
+            "SELECT label, value_encrypted, type, creation_time, update_time FROM secrets " "WHERE id = ?",
             (id,),
         )
         row = cursor.fetchone()
@@ -170,7 +169,8 @@ class SecretStore:
         self.require_fernet()
         results = []
         for row in self.conn.execute(
-            "SELECT id, value_encrypted, type, creation_time, update_time FROM secrets WHERE label = ? ORDER BY creation_time DESC",
+            "SELECT id, value_encrypted, type, creation_time, update_time FROM secrets "
+            "WHERE label = ? ORDER BY creation_time DESC",
             (label,),
         ):
             try:
