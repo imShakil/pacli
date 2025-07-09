@@ -1,5 +1,12 @@
 # 🔐 pacli - Secrets Management CL
 
+[![Build Status](https://github.com/imshakil/pacli/actions/workflows/release.yml/badge.svg)](https://github.com/imshakil/pacli/actions)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/imShakil/pacli/main.svg)](https://results.pre-commit.ci/latest/github/imShakil/pacli/main)
+[![PyPI version](https://img.shields.io/pypi/v/pacli-tool.svg)](https://pypi.org/project/pacli-tool/)
+[![PyPI Downloads](https://static.pepy.tech/badge/pacli-tool)](https://pepy.tech/projects/pacli-tool)
+[![Python Versions](https://img.shields.io/pypi/pyversions/pacli-tool.svg)](https://pypi.org/project/pacli-tool/)
+[![License](https://img.shields.io/github/license/imshakil/pacli)](LICENSE)
+
 pacli is a simple, privacy-focused CLI tool for managing your secrets locally. Unlike online password managers, pacli keeps your sensitive information on your device, reducing the risk of leaks from server breaches or hacks.
 
 ___
