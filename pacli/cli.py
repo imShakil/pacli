@@ -160,7 +160,7 @@ def delete(label):
     click.echo(f"🔐 Deleting secret with ID: {selected['id']} and label: {label}")
     store.delete_secret(selected["id"])
     logger.info(f"Secret deleted for label: {label} with ID: {selected['id']}")
-    click.echo("/n/n 🗑️ Deleted from the list.")
+    click.echo("🗑️ Deleted from the list.")
 
 
 @cli.command()
