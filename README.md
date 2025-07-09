@@ -1,4 +1,4 @@
-# 🔐 pacli - Secrets Management CL
+# 🔐 pacli - Secrets Management CLI
 
 [![Build Status](https://github.com/imshakil/pacli/actions/workflows/release.yml/badge.svg)](https://github.com/imshakil/pacli/actions)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/imShakil/pacli/main.svg)](https://results.pre-commit.ci/latest/github/imShakil/pacli/main)
