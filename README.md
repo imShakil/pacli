@@ -77,3 +77,8 @@ pacli get google --clip
 ```
 
 For more information, use `pacli --help` or see the documentation.
+
+## Demo
+
+![demo](https://github.com/user-attachments/assets/be7ea309-9f5c-4f5a-a4f3-fdf065577d8b)
+
