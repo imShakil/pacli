@@ -41,10 +41,12 @@ pacli --help
 
 | Command                | Description                                      |
 |------------------------|--------------------------------------------------|
-| `init`                 | Initialize pacli and set a master password        |
+| `init`                 | Initialize pacli and set a master password       |
 | `add`                  | Add a secret with a label                        |
 | `get`                  | Retrieve secrets by label                        |
 | `get-by-id`            | Retrieve a secret by its ID                      |
+| `update`               | Update old secret by label                       |
+| `update-by-id` .       | Update old secret by its ID                      |
 | `list`                 | List all saved secrets                           |
 | `delete`               | Delete a secret by label                         |
 | `delete-by-id`         | Delete a secret by its ID                        |
