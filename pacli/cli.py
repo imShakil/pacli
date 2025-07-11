@@ -77,7 +77,7 @@ def add(ctx, token, password_flag, label, arg1, arg2):
 
 
 @cli.command()
-@click.argument("label")
+@click.argument("label", required=True)
 @click.option("--clip", is_flag=True, help="Copy the secret to clipboard instead of printing.")
 def get(label, clip):
     """Retrieve secrets by LABEL. Use --clip to copy to clipboard."""
@@ -130,8 +130,59 @@ def list():
 
 
 @cli.command()
-@click.argument("label")
-# @click.confirmation_option(prompt='Are you sure you want to delete this secret?')
+@click.argument("label", required=True)
+def update(label):
+    """Update a secret by LABEL."""
+    store = SecretStore()
+    if not store.is_master_set():
+        click.echo("❌ Master password not set. Run 'pacli init' first.")
+        return
+    matches = store.get_secrets_by_label(label)
+    if not matches:
+        logger.warning(f"Attempted to update non-existent secret: {label}")
+        click.echo("❌ Secret not found or may already be deleted.")
+        return
+    logger.info(f"Updating secret for label: {label}")
+    if len(matches) == 1:
+        selected = matches[0]
+    else:
+        selected = choice_one(label, matches)
+        if not selected:
+            click.echo("❌ No valid selection made. Aborting.")
+            return
+    id = selected["id"]
+    new_secret = getpass(f"Enter updated secret for {label} with {id}:")
+    try:
+        store.update_secret(selected["id"], new_secret)
+        click.echo("✅ Updated secret successfully!")
+        logger.info(f"Secreted update for {label} with ID: {selected['id']}")
+    except Exception as e:
+        click.echo(f"❌ couldn't able to update due to {e}")
+
+
+@cli.command()
+@click.argument("id", required=True)
+def update_by_id(id):
+    """Update secret with ID"""
+    store = SecretStore()
+    if not store.is_master_set():
+        click.echo("❌ Master password not set. Run 'pacli init' first.")
+        return
+    secret = store.get_secret_by_id(id)
+    if not secret:
+        click.echo(f"❌ No secret found with ID: {id}")
+        return
+    new_secret = getpass("Enter updated secret: ")
+    try:
+        store.update_secret(id, new_secret)
+        click.echo("✅ Updated secret successfully!")
+        logger.info(f"Secreted update with ID: {id}")
+    except Exception as e:
+        click.echo(f"❌ couldn't able to update due to {e}")
+
+
+@cli.command()
+@click.argument("label", required=True)
 def delete(label):
     """Delete a secret by LABEL."""
     store = SecretStore()
@@ -165,7 +216,7 @@ def delete(label):
 
 @cli.command()
 def change_master_key():
-    """Change the master password wihtout losing existing secrets."""
+    """Change the master password wihtout losing secrets."""
     store = SecretStore()
     store.require_fernet()  # Ensures old key is loaded
     all_secrets = []

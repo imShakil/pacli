@@ -135,6 +135,13 @@ class SecretStore:
             for row in self.conn.execute("SELECT id, label, type, creation_time, update_time FROM secrets")
         ]
 
+    def update_secret(self, id, secret):
+        self.require_fernet()
+        encrypted = self.fernet.encrypt(secret.encode()).decode()
+        now = int(time.time())
+        self.conn.execute("UPDATE secrets SET value_encrypted = ?, update_time = ? WHERE id = ?", (encrypted, now, id))
+        self.conn.commit()
+
     def delete_secret(self, id):
         self.require_fernet()
         self.conn.execute("DELETE FROM secrets WHERE id = ?", (id,))
