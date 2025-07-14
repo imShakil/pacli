@@ -22,6 +22,7 @@ pacli is a simple, privacy-focused CLI tool for managing your secrets locally. U
 - Add, retrieve, update, and delete secrets
 - Copy secrets directly to your clipboard
 - SSH connection management with key file support
+- Export list of secrets into JSON or CSV file
 - Easy-to-use command-line interface
 
 ## Installation
