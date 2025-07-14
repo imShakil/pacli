@@ -28,8 +28,6 @@ def get_salt():
 
 
 class SecretStore:
-    _session_fernet = None  # Class-level cache for session
-
     def __init__(self, db_path="~/.config/pacli/sqlite3.db"):
         db_path = os.path.expanduser(db_path)
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -68,7 +66,6 @@ class SecretStore:
     def update_master_password(self, new_password):
         salt = get_salt()
         self.fernet = self._derive_fernet(new_password, salt)
-        SecretStore._session_fernet = self.fernet
         logger.info("Master password updated...")
 
     def _derive_fernet(self, password, salt):
@@ -83,17 +80,15 @@ class SecretStore:
         return Fernet(key)
 
     def require_fernet(self):
-        if self.fernet is not None:
-            return
-        if SecretStore._session_fernet is not None:
-            self.fernet = SecretStore._session_fernet
-            return
         if not self.is_master_set():
             raise RuntimeError('Master password not set. Run "pacli init" first.')
+        if self.fernet is not None:
+            return
         salt = get_salt()
-        password = getpass("Enter master password: ")
+        password = os.environ.get("PACLI_MASTER_PASSWORD")
+        if password is None:
+            password = getpass("Enter master password: ")
         self.fernet = self._derive_fernet(password, salt)
-        SecretStore._session_fernet = self.fernet
 
     def save_secret(self, label, secret, secret_type):
         self.require_fernet()
