@@ -53,6 +53,7 @@ pacli --help
 | `delete-by-id`         | Delete a secret by its ID                        |
 | `ssh`                  | Connect to SSH server using saved credentials    |
 | `change-master-key`    | Change the master password without losing data   |
+| `export`               | Export secrets to JSON or CSV format             |
 | `version`              | Show the current version of pacli                |
 
 ### Examples
@@ -80,6 +81,12 @@ pacli get github
 
 # Connect via SSH
 pacli ssh ec2-vm
+
+# Export secrets to JSON
+pacli export --format json --output my_secrets.json
+
+# Export secrets to CSV
+pacli export --format csv --output my_secrets.csv
 ```
 
 ## Display Format

@@ -194,7 +194,12 @@ class SecretStore:
     def verify_master_password(self, password):
         try:
             salt = get_salt()
-            self._derive_fernet(password, salt)
+            test_fernet = self._derive_fernet(password, salt)
+            # Try to decrypt an existing secret to verify password
+            cursor = self.conn.execute("SELECT value_encrypted FROM secrets LIMIT 1")
+            row = cursor.fetchone()
+            if row:
+                test_fernet.decrypt(row[0].encode())
             return True
         except Exception as e:
             logger.error(f"Master password verification failed: {e}")
