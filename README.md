@@ -18,9 +18,10 @@ pacli is a simple, privacy-focused CLI tool for managing your secrets locally. U
 
 - Securely store and manage secrets locally
 - Master password protection
-- support separate option for token and password
+- Support separate options for token, password, and SSH connections
 - Add, retrieve, update, and delete secrets
 - Copy secrets directly to your clipboard
+- SSH connection management with key file support
 - Easy-to-use command-line interface
 
 ## Installation
@@ -46,29 +47,52 @@ pacli --help
 | `get`                  | Retrieve secrets by label                        |
 | `get-by-id`            | Retrieve a secret by its ID                      |
 | `update`               | Update old secret by label                       |
-| `update-by-id` .       | Update old secret by its ID                      |
+| `update-by-id`         | Update old secret by its ID                      |
 | `list`                 | List all saved secrets                           |
 | `delete`               | Delete a secret by label                         |
 | `delete-by-id`         | Delete a secret by its ID                        |
+| `ssh`                  | Connect to SSH server using saved credentials    |
 | `change-master-key`    | Change the master password without losing data   |
+| `export`               | Export secrets to JSON or CSV format             |
 | `version`              | Show the current version of pacli                |
 
-### Example: Adding and Retrieving a Secret
+### Examples
+
+#### Adding and Retrieving Secrets
 
 ```sh
 # Initialize pacli (run once)
 pacli init
 
-# Add a new secret
+# Add a password
 pacli add --pass github
+
+# Add a token
+pacli add --token api-key
+
+# Add SSH connection
+pacli add --ssh ec2-vm user:192.168.1.100
+
+# Add SSH connection with key file
+pacli add --ssh ec2-vm user:192.168.1.100 --key-path ~/.ssh/id_rsa
 
 # Retrieve a secret
 pacli get github
+
+# Connect via SSH
+pacli ssh ec2-vm
+
+# Export secrets to JSON
+pacli export --format json --output my_secrets.json
+
+# Export secrets to CSV
+pacli export --format csv --output my_secrets.csv
 ```
 
 ## Display Format
 
 - Credentials are shown as: `username:password`
+- SSH connections are shown as: `user:ip` or `user:ip (Key: /path/to/key)`
 
 ## Copy to Clipboard
 
@@ -79,6 +103,23 @@ pacli get google --clip
 ```
 
 For more information, use `pacli --help` or see the documentation.
+
+## Tips
+
+### Avoid Master Password Prompts
+
+To avoid entering your master password repeatedly, you can set it as an environment variable:
+
+```sh
+# For current session only
+export PACLI_MASTER_PASSWORD="your-master-password"
+
+# Or add to your shell profile for permanent use
+echo 'export PACLI_MASTER_PASSWORD="your-master-password"' >> ~/.bashrc  # For bash
+echo 'export PACLI_MASTER_PASSWORD="your-master-password"' >> ~/.zshrc   # For zsh
+```
+
+**Security Note:** Adding the password to your shell profile makes it persistent but less secure. Use the session-only approach for better security.
 
 ## Demo
 

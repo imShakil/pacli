@@ -1,11 +1,15 @@
 import os
+import json
+import csv
 import click
 import datetime
 import pyperclip
+import subprocess  # nosec B404
 from getpass import getpass
 from .store import SecretStore
 from .log import get_logger
 from . import __version__
+from .ssh_utils import suggest_ssh_hosts
 
 logger = get_logger("pacli.cli")
 VERSION = __version__
@@ -45,24 +49,54 @@ def init():
     is_flag=True,
     help="Use this flag to store a username and password instead of a token or generic secret.",
 )
+@click.option(
+    "--ssh",
+    "ssh_flag",
+    is_flag=True,
+    help="Use this flag to store SSH connection details (user:ip).",
+)
+@click.option(
+    "--key",
+    "key_path",
+    help="Path to SSH private key file.",
+)
+@click.option(
+    "--port",
+    "-p",
+    "ssh_port",
+    help="SSH port (default: 22).",
+)
+@click.option(
+    "--opts",
+    "ssh_opts",
+    help="Additional SSH options.",
+)
 @click.argument("label", required=True)
 @click.argument("arg1", required=False)
 @click.argument("arg2", required=False)
 @click.pass_context
-def add(ctx, token, password_flag, label, arg1, arg2):
-    """Add a secret with LABEL. Use --token for a token or --pass for username and password."""
+def add(ctx, token, password_flag, ssh_flag, key_path, ssh_port, ssh_opts, label, arg1, arg2):
+    """Add a secret with LABEL. Use --token for a token, --pass for username and password, or --ssh for SSH Server."""
     store = SecretStore()
     if not store.is_master_set():
         click.echo("❌ Master password not set. Run 'pacli init' first.")
         return
-    if token and password_flag:
-        logger.error("Both --token and --pass flags used together.")
-        click.echo("❌ You cannot use both --token and --pass flags at the same time.")
+
+    # Auto-detect type if no flags specified
+    if not any([token, password_flag, ssh_flag]):
+        if arg1 and ("@" in arg1 or (":" in arg1 and not arg1.count(":") > 1)):
+            ssh_flag = True
+        elif arg1 and arg2:  # username and password provided
+            password_flag = True
+        else:
+            token = True  # default to token
+
+    flags = [token, password_flag, ssh_flag]
+    if sum(flags) > 1:
+        logger.error("Multiple flags used together.")
+        click.echo("❌ You cannot use multiple flags at the same time.")
         return
-    if not token and not password_flag:
-        logger.error("Neither --token nor --pass flag specified.")
-        click.echo("❌ You must specify either --token or --pass.")
-        return
+
     if token:
         secret = arg1 if arg1 else getpass("🔐 Enter token: ")
         store.save_secret(label, secret, "token")
@@ -74,6 +108,40 @@ def add(ctx, token, password_flag, label, arg1, arg2):
         store.save_secret(label, f"{username}:{password}", "password")
         logger.info(f"Username and password saved for label: {label}")
         click.echo(f"✅ {label} credentials saved.")
+    elif ssh_flag:
+        if arg1:
+            if "@" in arg1:
+                user_ip = arg1.replace("@", ":")
+            elif ":" in arg1:
+                user_ip = arg1
+            else:
+                user = arg1
+                ip = arg2 if arg2 else click.prompt("Enter SSH IP/hostname")
+                user_ip = f"{user}:{ip}"
+        else:
+            # Suggest hosts from SSH config
+            suggested_hosts = suggest_ssh_hosts()
+            if suggested_hosts:
+                click.echo("Available SSH hosts from config:")
+                for i, host in enumerate(suggested_hosts[:5], 1):
+                    click.echo(f"  {i}. {host}")
+                click.echo("")
+
+            user = click.prompt("Enter SSH username")
+            ip = click.prompt("Enter SSH IP/hostname")
+            user_ip = f"{user}:{ip}"
+
+        ssh_data = user_ip
+        if key_path:
+            ssh_data += f"|key:{key_path}"
+        if ssh_port:
+            ssh_data += f"|port:{ssh_port}"
+        if ssh_opts:
+            ssh_data += f"|opts:{ssh_opts}"
+
+        store.save_secret(label, ssh_data, "ssh")
+        logger.info(f"SSH connection saved for label: {label}")
+        click.echo(f"✅ SSH connection {label} saved.")
 
 
 @cli.command()
@@ -99,9 +167,32 @@ def get(label, clip):
             return
     logger.info(f"Secret retrieved for label: {label}, id: {selected['id']}")
     if clip:
-        copy_to_clipboard(selected["secret"])
+        if selected["type"] == "ssh":
+            ssh_data = selected["secret"]
+            user_ip = ssh_data.split("|")[0]
+            copy_to_clipboard(user_ip)
+        else:
+            copy_to_clipboard(selected["secret"])
     else:
-        click.echo(f"🔐 Secret: {selected['secret']}")
+        if selected["type"] == "ssh":
+            ssh_data = selected["secret"]
+            parts = ssh_data.split("|")
+            user_ip = parts[0]
+            extras = []
+            for part in parts[1:]:
+                if part.startswith("key:"):
+                    extras.append(f"Key: {part[4:]}")
+                elif part.startswith("port:"):
+                    extras.append(f"Port: {part[5:]}")
+                elif part.startswith("opts:"):
+                    extras.append(f"Opts: {part[5:]}")
+
+            display = f"🔐 SSH: {user_ip}"
+            if extras:
+                display += f" ({', '.join(extras)})"
+            click.echo(display)
+        else:
+            click.echo(f"🔐 Secret: {selected['secret']}")
 
 
 @cli.command()
@@ -151,7 +242,27 @@ def update(label):
             click.echo("❌ No valid selection made. Aborting.")
             return
     id = selected["id"]
-    new_secret = getpass(f"Enter updated secret for {label} with {id}:")
+    if selected["type"] == "ssh":
+        current_ssh = selected["secret"]
+        if "|" in current_ssh:
+            user_ip, key_path = current_ssh.split("|", 1)
+            click.echo(f"Current SSH: {user_ip} (Key: {key_path})")
+        else:
+            click.echo(f"Current SSH: {current_ssh}")
+
+        new_user = click.prompt("Enter new SSH username", default="")
+        new_ip = click.prompt("Enter new SSH IP/hostname", default="")
+        new_key = click.prompt("Enter new SSH key path (optional)", default="")
+
+        if new_user and new_ip:
+            new_secret = f"{new_user}:{new_ip}"
+            if new_key:
+                new_secret += f"|{new_key}"
+        else:
+            click.echo("❌ Username and IP are required for SSH connections.")
+            return
+    else:
+        new_secret = getpass(f"Enter updated secret for {label} with {id}:")
     try:
         store.update_secret(selected["id"], new_secret)
         click.echo("✅ Updated secret successfully!")
@@ -172,7 +283,27 @@ def update_by_id(id):
     if not secret:
         click.echo(f"❌ No secret found with ID: {id}")
         return
-    new_secret = getpass("Enter updated secret: ")
+    if secret["type"] == "ssh":
+        current_ssh = secret["secret"]
+        if "|" in current_ssh:
+            user_ip, key_path = current_ssh.split("|", 1)
+            click.echo(f"Current SSH: {user_ip} (Key: {key_path})")
+        else:
+            click.echo(f"Current SSH: {current_ssh}")
+
+        new_user = click.prompt("Enter new SSH username", default="")
+        new_ip = click.prompt("Enter new SSH IP/hostname", default="")
+        new_key = click.prompt("Enter new SSH key path (optional)", default="")
+
+        if new_user and new_ip:
+            new_secret = f"{new_user}:{new_ip}"
+            if new_key:
+                new_secret += f"|{new_key}"
+        else:
+            click.echo("❌ Username and IP are required for SSH connections.")
+            return
+    else:
+        new_secret = getpass("Enter updated secret: ")
     try:
         store.update_secret(id, new_secret)
         click.echo("✅ Updated secret successfully!")
@@ -260,9 +391,32 @@ def get_by_id(id, clip):
             click.echo(f"❌ No secret found with ID: {id}")
             return
         if clip:
-            copy_to_clipboard(secret["secret"])
+            if secret["type"] == "ssh":
+                ssh_data = secret["secret"]
+                user_ip = ssh_data.split("|")[0]
+                copy_to_clipboard(user_ip)
+            else:
+                copy_to_clipboard(secret["secret"])
         else:
-            click.echo(f"🔐 Secret for ID {id}: {secret['secret']}")
+            if secret["type"] == "ssh":
+                ssh_data = secret["secret"]
+                parts = ssh_data.split("|")
+                user_ip = parts[0]
+                extras = []
+                for part in parts[1:]:
+                    if part.startswith("key:"):
+                        extras.append(f"Key: {part[4:]}")
+                    elif part.startswith("port:"):
+                        extras.append(f"Port: {part[5:]}")
+                    elif part.startswith("opts:"):
+                        extras.append(f"Opts: {part[5:]}")
+
+                display = f"🔐 SSH for ID {id}: {user_ip}"
+                if extras:
+                    display += f" ({', '.join(extras)})"
+                click.echo(display)
+            else:
+                click.echo(f"🔐 Secret for ID {id}: {secret['secret']}")
     except Exception as e:
         logger.error(f"Error retrieving secret by ID {id}: {e}")
         click.echo("❌ An error occurred while retrieving the secret.")
@@ -283,6 +437,136 @@ def delete_by_id(id):
     except Exception as e:
         logger.error(f"Error deleting secret by ID {id}: {e}")
         click.echo("❌ An error occurred while deleting the secret.")
+
+
+@cli.command()
+@click.option("--format", "-f", type=click.Choice(["json", "csv"]), default="csv", help="Export format (json or csv)")
+@click.option("--output", "-o", help="Output file path")
+def export(format, output):
+    """Export secrets to JSON or CSV format."""
+    store = SecretStore()
+    if not store.is_master_set():
+        click.echo("❌ Master password not set. Run 'pacli init' first.")
+        return
+
+    secrets = store.list_secrets()
+    if not secrets:
+        click.echo("❌ No secrets to export.")
+        return
+
+    export_data = []
+    for sid, label, stype, ctime, utime in secrets:
+        secret_data = store.get_secret_by_id(sid)
+        if secret_data:
+            export_data.append(
+                {
+                    "id": sid,
+                    "label": label,
+                    "secret": secret_data["secret"],
+                    "type": stype,
+                    "created": datetime.datetime.fromtimestamp(ctime).isoformat() if ctime else None,
+                    "updated": datetime.datetime.fromtimestamp(utime).isoformat() if utime else None,
+                }
+            )
+
+    if not output:
+        output = f"pacli_export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}"
+
+    try:
+        if format == "json":
+            with open(output, "w") as f:
+                json.dump(export_data, f, indent=2)
+        else:  # csv
+            with open(output, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=["id", "label", "secret", "type", "created", "updated"])
+                writer.writeheader()
+                writer.writerows(export_data)
+
+        click.echo(f"✅ Exported {len(export_data)} secrets to {output}")
+        logger.info(f"Exported {len(export_data)} secrets to {output}")
+    except Exception as e:
+        click.echo(f"❌ Export failed: {e}")
+        logger.error(f"Export failed: {e}")
+
+
+@cli.command()
+@click.argument("label", required=True)
+def ssh(label):
+    """Connect to SSH server using saved SSH credentials."""
+    store = SecretStore()
+    if not store.is_master_set():
+        click.echo("❌ Master password not set. Run 'pacli init' first.")
+        return
+
+    matches = store.get_secrets_by_label(label)
+    if not matches:
+        logger.warning(f"SSH connection not found for label: {label}")
+        click.echo("❌ SSH connection not found.")
+        return
+
+    ssh_secrets = [m for m in matches if m["type"] == "ssh"]
+    if not ssh_secrets:
+        click.echo("❌ No SSH connections found for this label.")
+        return
+
+    if len(ssh_secrets) == 1:
+        selected = ssh_secrets[0]
+    else:
+        selected = choice_one(label, ssh_secrets)
+        if not selected:
+            click.echo("❌ No valid selection made. Aborting.")
+            return
+
+    ssh_data = selected["secret"]
+    parts = ssh_data.split("|")
+    user_ip = parts[0]
+
+    if ":" not in user_ip:
+        click.echo("❌ Invalid SSH format. Expected user:host")
+        return
+
+    user, ip = user_ip.split(":", 1)
+
+    # Validate user and IP
+    if not user.replace("-", "").replace("_", "").replace(".", "").isalnum():
+        click.echo("❌ Invalid username format")
+        return
+
+    cmd_parts = ["ssh"]
+
+    # Parse additional options with validation
+    for part in parts[1:]:
+        if part.startswith("key:"):
+            key_path = part[4:]
+            if not key_path or ".." in key_path:
+                click.echo("❌ Invalid key path")
+                return
+            cmd_parts.extend(["-i", key_path])
+        elif part.startswith("port:"):
+            port = part[5:]
+            if not port.isdigit() or not (1 <= int(port) <= 65535):
+                click.echo("❌ Invalid port number")
+                return
+            cmd_parts.extend(["-p", port])
+        elif part.startswith("opts:"):
+            opts = part[5:]
+            # Only allow safe SSH options
+            safe_opts = ["-o", "StrictHostKeyChecking=no", "UserKnownHostsFile=/dev/null", "ConnectTimeout=10"]
+            if not all(opt in safe_opts or opt.startswith("-o") for opt in opts.split()):
+                click.echo("❌ Unsafe SSH options detected")
+                return
+            cmd_parts.extend(opts.split())
+
+    cmd_parts.append(f"{user}@{ip}")
+
+    logger.info(f"Connecting to SSH: {user}@{ip}")
+    click.echo(f"🔗 Connecting to {user}@{ip}...")
+    try:
+        subprocess.run(cmd_parts, check=False)  # nosec B603
+    except FileNotFoundError:
+        click.echo("❌ SSH command not found. Please install OpenSSH client.")
+    except Exception as e:
+        click.echo(f"❌ SSH connection failed: {e}")
 
 
 @cli.command()
