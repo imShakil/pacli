@@ -8,11 +8,13 @@ import subprocess  # nosec B404
 from getpass import getpass
 from .store import SecretStore
 from .log import get_logger
-from . import __version__
+from . import __version__, __metadata__
 from .ssh_utils import suggest_ssh_hosts
 
 logger = get_logger("pacli.cli")
 VERSION = __version__
+AUTHOR = None
+HOMEPAGE = None
 
 
 @click.group()
@@ -572,11 +574,14 @@ def ssh(label):
 @cli.command()
 def version():
     """Show the current version of pacli."""
+    if __metadata__:
+        AUTHOR = __metadata__["Author-email"]
+        HOMEPAGE = __metadata__["Project-URL"].split(",")[1].strip()
     click.echo("🔐 pacli - Secrets Management CLI")
     click.echo("-" * 33)
     click.echo(f"Version: {VERSION}")
-    click.echo("Author: imShakil")
-    click.echo("GitHub: https://github.com/imshakil/pacli")
+    click.echo(f"Author: {AUTHOR}")
+    click.echo(f"GitHub: {HOMEPAGE}")
 
 
 def choice_one(label, matches):

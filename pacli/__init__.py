@@ -1,9 +1,7 @@
-from importlib.metadata import (
-    version as importlib_version,
-    PackageNotFoundError as ImportlibPackageNotFoundError,
-)
+from importlib.metadata import version, PackageNotFoundError, metadata
 
 try:
-    __version__ = importlib_version("pacli-tool")
-except ImportlibPackageNotFoundError:
-    __version__ = "unknown"
+    __version__ = version("pacli-tool")
+    __metadata__ = metadata("pacli-tool")
+except PackageNotFoundError:
+    __version__ = "Unknown"
