@@ -1,12 +1,6 @@
-certifi==2025.8.3
 cffi==1.17.1
-charset-normalizer==3.4.3
 click==8.2.1
 cryptography==45.0.5
-idna==3.10
-pip==23.2.1
 pycparser==2.22
 pyperclip==1.9.0
 requests==2.32.4
-setuptools==65.5.0
-urllib3==2.5.0
