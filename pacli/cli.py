@@ -10,6 +10,8 @@ from .store import SecretStore
 from .log import get_logger
 from . import __version__, __metadata__
 from .ssh_utils import suggest_ssh_hosts
+from .linklyhq import LinklyHQ
+
 
 logger = get_logger("pacli.cli")
 VERSION = __version__
@@ -569,6 +571,30 @@ def ssh(label):
         click.echo("❌ SSH command not found. Please install OpenSSH client.")
     except Exception as e:
         click.echo(f"❌ SSH connection failed: {e}")
+
+
+@cli.command()
+@click.argument("url", required=True)
+@click.option("--name", "-n", help="Custom name for the shortened URL")
+@click.option("--clip", "-c", is_flag=True, help="Copy the shortened URL to clipboard instead of printing.")
+def short(url, name, clip):
+    """Shorten URL with linklyhq.com. To use this feature you must have linklyhq.com API and Workspace ID"""
+    api_key = os.getenv("PACLI_LINKLYHQ_KEY")
+    workspace_id = os.getenv("PACLI_LINKLYHQ_WID")
+
+    if not api_key or not workspace_id:
+        click.echo("❌ API KEY not found. Set PACLI_LINKLYHQ_KEY and PACLI_LINKLYHQ_WID environment variables.")
+        return
+    linklyhq = LinklyHQ(api_key, workspace_id)
+    shortened_url = linklyhq.shorten(url, name)
+    if shortened_url:
+        if clip:
+            copy_to_clipboard(shortened_url)
+        else:
+            click.echo(f"🔗 Shortened URL: {shortened_url}")
+    else:
+        click.echo("❌ Failed to shorten URL.")
+        logger.error(f"Failed to shorten URL: {url}")
 
 
 @cli.command()
