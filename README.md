@@ -22,6 +22,7 @@ pacli is a simple, privacy-focused CLI tool for managing your secrets locally. U
 - Add, retrieve, update, and delete secrets
 - Copy secrets directly to your clipboard
 - SSH connection management with key file support
+- URL shortening with LinklyHQ integration
 - Export list of secrets into JSON or CSV file
 - Easy-to-use command-line interface
 
@@ -53,6 +54,7 @@ pacli --help
 | `delete`               | Delete a secret by label                         |
 | `delete-by-id`         | Delete a secret by its ID                        |
 | `ssh`                  | Connect to SSH server using saved credentials    |
+| `short`                | Shorten URLs using LinklyHQ service              |
 | `change-master-key`    | Change the master password without losing data   |
 | `export`               | Export secrets to JSON or CSV format             |
 | `version`              | Show the current version of pacli                |
@@ -88,6 +90,12 @@ pacli export --format json --output my_secrets.json
 
 # Export secrets to CSV
 pacli export --format csv --output my_secrets.csv
+
+# Shorten a URL
+pacli short https://example.com/very/long/url
+
+# Shorten with custom name and copy to clipboard
+pacli short https://example.com -n "My Link" --clip
 ```
 
 ## Display Format
@@ -121,6 +129,22 @@ echo 'export PACLI_MASTER_PASSWORD="your-master-password"' >> ~/.zshrc   # For z
 ```
 
 **Security Note:** Adding the password to your shell profile makes it persistent but less secure. Use the session-only approach for better security.
+
+### URL Shortening Setup
+
+To use the URL shortening feature, set up your [LinklyHQ](https://linklyhq.com) credentials as environment variables:
+
+```sh
+# Set LinklyHQ credentials
+export PACLI_LINKLYHQ_KEY="your_api_key"
+export PACLI_LINKLYHQ_WID="your_workspace_id"
+
+# Add to your shell profile for permanent use
+echo 'export PACLI_LINKLYHQ_KEY="your_api_key"' >> ~/.bashrc
+echo 'export PACLI_LINKLYHQ_WID="your_workspace_id"' >> ~/.bashrc
+```
+
+> Visits: https://linklyhq.com to get your credentials.
 
 ## Demo
 
