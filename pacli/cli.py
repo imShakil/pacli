@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import csv
 import click
@@ -14,9 +15,6 @@ from .linklyhq import LinklyHQ
 
 
 logger = get_logger("pacli.cli")
-VERSION = __version__
-AUTHOR = None
-HOMEPAGE = None
 
 
 @click.group()
@@ -598,8 +596,27 @@ def short(url, name, clip):
 
 
 @cli.command()
+def cc():
+    """Copy stdin content to clipboard."""
+    try:
+        content = sys.stdin.read()  # .strip()
+        if not content:
+            click.echo("❌ No input received from stdin.")
+            return
+        copy_to_clipboard(content)
+        logger.info("Content copied to clipboard from stdin")
+    except Exception as e:
+        click.echo(f"❌ Failed to read from stdin: {e}")
+        logger.error(f"Failed to read from stdin: {e}")
+
+
+@cli.command()
 def version():
     """Show the current version of pacli."""
+    VERSION = __version__
+    AUTHOR = "Unknown"
+    HOMEPAGE = "Unknown"
+
     if __metadata__:
         AUTHOR = __metadata__["Author-email"]
         HOMEPAGE = __metadata__["Project-URL"].split(",")[1].strip()
