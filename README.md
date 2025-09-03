@@ -22,7 +22,7 @@ pacli is a simple, privacy-focused CLI tool for managing your secrets locally. U
 - Add, retrieve, update, and delete secrets
 - Copy secrets directly to your clipboard
 - SSH connection management with key file support
-- URL shortening with LinklyHQ integration
+- URL shortening with [LinklyHQ](https://linklyhq.com/?via=ShakilOps) integration
 - Export list of secrets into JSON or CSV file
 - Easy-to-use command-line interface
 
@@ -157,7 +157,7 @@ echo 'export PACLI_MASTER_PASSWORD="your-master-password"' >> ~/.zshrc   # For z
 
 ### URL Shortening Setup
 
-To use the URL shortening feature, set up your [LinklyHQ](https://linklyhq.com) credentials as environment variables:
+To use the URL shortening feature, set up your [LinklyHQ](https://linklyhq.com/?via=ShakilOps) credentials as environment variables:
 
 ```sh
 # Set LinklyHQ credentials
@@ -169,7 +169,7 @@ echo 'export PACLI_LINKLYHQ_KEY="your_api_key"' >> ~/.bashrc
 echo 'export PACLI_LINKLYHQ_WID="your_workspace_id"' >> ~/.bashrc
 ```
 
-> Visits: https://linklyhq.com to get your credentials.
+> [Visits here](https://linklyhq.com/?via=ShakilOps) to get your credentials.
 
 ## Demo
 
