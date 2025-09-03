@@ -55,6 +55,7 @@ pacli --help
 | `delete-by-id`         | Delete a secret by its ID                        |
 | `ssh`                  | Connect to SSH server using saved credentials    |
 | `short`                | Shorten URLs using LinklyHQ service              |
+| `cc`                   | Copy stdin content to clipboard                  |
 | `change-master-key`    | Change the master password without losing data   |
 | `export`               | Export secrets to JSON or CSV format             |
 | `version`              | Show the current version of pacli                |
@@ -96,6 +97,15 @@ pacli short https://example.com/very/long/url
 
 # Shorten with custom name and copy to clipboard
 pacli short https://example.com -n "My Link" --clip
+
+# Copy file content to clipboard
+cat file.txt | pacli cc
+
+# Copy command output to clipboard
+echo "Hello World" | pacli cc
+
+# Copy API response to clipboard
+curl -s https://api.example.com/data | pacli cc
 ```
 
 ## Display Format
@@ -109,6 +119,21 @@ To copy a secret directly to your clipboard, use the `--clip` option:
 
 ```sh
 pacli get google --clip
+```
+
+### Pipeline Usage
+
+Use `pacli cc` to copy any command output or file content to clipboard:
+
+```sh
+# Copy file contents
+cat ~/.ssh/id_rsa.pub | pacli cc
+
+# Copy command output
+ls -la | pacli cc
+
+# Copy JSON response
+curl -s https://api.github.com/user | pacli cc
 ```
 
 For more information, use `pacli --help` or see the documentation.
