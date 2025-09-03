@@ -12,7 +12,7 @@ ___
 [![License](https://img.shields.io/github/license/imshakil/pacli)](LICENSE)
 [![security:bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/imShakil/pacli)
 
-pacli is a simple, privacy-focused CLI tool for managing your secrets locally. Unlike online password managers, pacli keeps your sensitive information on your device, reducing the risk of leaks from server breaches or hacks.
+pacli is a secure, local-first secrets manager that stores your passwords, API keys, and SSH credentials with encryption and master password protection - no cloud dependencies required.
 
 ## Features
 
