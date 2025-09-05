@@ -24,9 +24,9 @@ logger = get_logger("pacli.commands.secrets")
     is_flag=True,
     help="Use this flag to store SSH connection details (user:ip).",
 )
-@click.option("--key", "key_path", help="Path to SSH private key file.")
+@click.option("--key", "-k", "key_path", help="Path to SSH private key file.")
 @click.option("--port", "-p", "ssh_port", help="SSH port (default: 22).")
-@click.option("--opts", "ssh_opts", help="Additional SSH options.")
+@click.option("--opts", "-o", "ssh_opts", help="Additional SSH options.")
 @click.argument("label", required=True)
 @click.argument("arg1", required=False)
 @click.argument("arg2", required=False)
