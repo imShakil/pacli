@@ -7,7 +7,7 @@ ___
 [![Build Status](https://github.com/imshakil/pacli/actions/workflows/release.yml/badge.svg)](https://github.com/imshakil/pacli/actions)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/imShakil/pacli/main.svg)](https://results.pre-commit.ci/latest/github/imShakil/pacli/main)
 [![PyPI version](https://img.shields.io/pypi/v/pacli-tool.svg)](https://pypi.org/project/pacli-tool/)
-[![PyPI Downloads](https://static.pepy.tech/badge/pacli-tool)](https://pepy.tech/projects/pacli-tool)
+[![PyPI Downloads](https://img.shields.io/pepy/dt/pacli-tool?style=flat)](https://pepy.tech/projects/pacli-tool)
 [![Python Versions](https://img.shields.io/pypi/pyversions/pacli-tool.svg)](https://pypi.org/project/pacli-tool/)
 [![License](https://img.shields.io/github/license/imshakil/pacli)](LICENSE)
 [![security:bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/imShakil/pacli)
@@ -78,7 +78,7 @@ pacli add --token api-key
 pacli add --ssh ec2-vm user:192.168.1.100
 
 # Add SSH connection with key file
-pacli add --ssh ec2-vm user:192.168.1.100 --key-path ~/.ssh/id_rsa
+pacli add --ssh ec2-vm user:192.168.1.100 --key ~/.ssh/id_rsa
 
 # Retrieve a secret
 pacli get github
