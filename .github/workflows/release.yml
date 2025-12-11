@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*.*.*"
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -48,8 +50,15 @@ jobs:
           name: release-dists
           path: dist/
 
-      - name: "Create release info file"
-        run: echo ${{ github.sha }} > release.txt
+      - name: Create release metadata
+        run: |
+          cat > release.txt << EOF
+          Release: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          Repository: ${{ github.repository }}
+          EOF
+          cat release.txt
 
       - name: "Upload release info file"
         uses: actions/upload-artifact@v4
@@ -57,14 +66,19 @@ jobs:
           name: release-info
           path: release.txt
 
-      - name: "Create GitHub Release"
+      - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
             dist/*
             release.txt
           tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
   pypi-publish:
     needs: build-and-release
