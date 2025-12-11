@@ -3,6 +3,8 @@ import uuid
 import time
 import base64
 import sqlite3
+import threading
+import hashlib
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
@@ -13,6 +15,7 @@ from .log import get_logger
 # Salt and Fernet key management: store/load salt from ~/.config/pacli/salt.bin and derive key from master password
 
 SALT_PATH = os.path.expanduser("~/.config/pacli/salt.bin")
+PASSWORD_HASH_PATH = os.path.expanduser("~/.config/pacli/password_hash.bin")
 logger = get_logger("pacli.store")
 
 
@@ -29,10 +32,12 @@ def get_salt():
 
 class SecretStore:
     def __init__(self, db_path="~/.config/pacli/sqlite3.db"):
-        db_path = os.path.expanduser(db_path)
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
-        self.conn.execute(
+        self.db_path = os.path.expanduser(db_path)
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self._local = threading.local()
+        self.fernet = None
+        # Initialize the database schema
+        self._get_conn().execute(
             """
             CREATE TABLE IF NOT EXISTS secrets (
                 id TEXT PRIMARY KEY,
@@ -44,7 +49,18 @@ class SecretStore:
             )
             """
         )
-        self.fernet = None
+        self._get_conn().commit()
+
+    def _get_conn(self):
+        """Get a thread-local database connection."""
+        if not hasattr(self._local, "conn") or self._local.conn is None:
+            self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        return self._local.conn
+
+    @property
+    def conn(self):
+        """Property to access the thread-local connection."""
+        return self._get_conn()
 
     def is_master_set(self):
         return os.path.exists(SALT_PATH + ".set")
@@ -59,6 +75,10 @@ class SecretStore:
             print("Passwords do not match or empty. Try again.")
         with open(SALT_PATH + ".set", "w") as f:
             f.write("set")
+        # Store password hash for verification
+        password_hash = hashlib.sha256(pw1.encode()).hexdigest()
+        with open(PASSWORD_HASH_PATH, "w") as f:
+            f.write(password_hash)
         self.fernet = self._derive_fernet(pw1, salt)
         SecretStore._session_fernet = self.fernet
         logger.info("Master password set.")
@@ -79,13 +99,14 @@ class SecretStore:
         key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
         return Fernet(key)
 
-    def require_fernet(self):
+    def require_fernet(self, password=None):
         if not self.is_master_set():
             raise RuntimeError('Master password not set. Run "pacli init" first.')
         if self.fernet is not None:
             return
         salt = get_salt()
-        password = os.environ.get("PACLI_MASTER_PASSWORD")
+        if password is None:
+            password = os.environ.get("PACLI_MASTER_PASSWORD")
         if password is None:
             password = getpass("Enter master password: ")
         self.fernet = self._derive_fernet(password, salt)
@@ -193,14 +214,27 @@ class SecretStore:
 
     def verify_master_password(self, password):
         try:
+            # First, try to verify against stored password hash
+            if os.path.exists(PASSWORD_HASH_PATH):
+                with open(PASSWORD_HASH_PATH, "r") as f:
+                    stored_hash = f.read().strip()
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                if password_hash == stored_hash:
+                    return True
+                else:
+                    return False
+
+            # Fallback: try to decrypt an existing secret to verify password
             salt = get_salt()
             test_fernet = self._derive_fernet(password, salt)
-            # Try to decrypt an existing secret to verify password
             cursor = self.conn.execute("SELECT value_encrypted FROM secrets LIMIT 1")
             row = cursor.fetchone()
             if row:
                 test_fernet.decrypt(row[0].encode())
-            return True
+                return True
+            else:
+                # If no secrets exist and no hash file, password cannot be verified
+                return False
         except Exception as e:
             logger.error(f"Master password verification failed: {e}")
             return False

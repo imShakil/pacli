@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 pacli - Web UI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen active">
+            <div class="login-container">
+                <div class="login-header">
+                    <h1>🔐 pacli</h1>
+                    <p>Secrets Management</p>
+                </div>
+                <form id="login-form" class="login-form">
+                    <div class="form-group">
+                        <label for="password">Master Password</label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Enter your master password"
+                            required
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Login</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main App Screen -->
+        <div id="main-screen" class="screen">
+            <div class="container">
+                <!-- Header -->
+                <header class="header">
+                    <div class="header-left">
+                        <h1>🔐 pacli</h1>
+                    </div>
+                    <div class="header-right">
+                        <button id="logout-btn" class="btn btn-secondary">Logout</button>
+                    </div>
+                </header>
+
+                <!-- Main Content -->
+                <main class="main-content">
+                    <!-- Sidebar -->
+                    <aside class="sidebar">
+                        <div class="sidebar-section">
+                            <button id="add-secret-btn" class="btn btn-primary btn-block">
+                                + Add Secret
+                            </button>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3>Filter by Type</h3>
+                            <div class="filter-buttons">
+                                <button class="filter-btn active" data-filter="all">All</button>
+                                <button class="filter-btn" data-filter="password">Password</button>
+                                <button class="filter-btn" data-filter="token">Token</button>
+                                <button class="filter-btn" data-filter="ssh">SSH</button>
+                            </div>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3>Search</h3>
+                            <input
+                                type="text"
+                                id="search-input"
+                                class="search-input"
+                                placeholder="Search secrets..."
+                            >
+                        </div>
+                    </aside>
+
+                    <!-- Secrets List -->
+                    <section class="secrets-section">
+                        <div id="secrets-list" class="secrets-list">
+                            <div class="loading">Loading secrets...</div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        </div>
+
+        <!-- Modal for Add/Edit Secret -->
+        <div id="secret-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">Add Secret</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <form id="secret-form" class="secret-form">
+                    <div class="form-group">
+                        <label for="secret-label">Label</label>
+                        <input
+                            type="text"
+                            id="secret-label"
+                            name="label"
+                            placeholder="e.g., github, api-key"
+                            required
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="secret-type">Type</label>
+                        <select id="secret-type" name="type" required>
+                            <option value="password">Password</option>
+                            <option value="token">Token</option>
+                            <option value="ssh">SSH</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="secret-value">Secret Value</label>
+                        <textarea
+                            id="secret-value"
+                            name="secret"
+                            placeholder="Enter your secret value"
+                            required
+                            rows="4"
+                        ></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary modal-close-btn">Cancel</button>
+                    </div>
+                    <div id="modal-error" class="error-message"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal for View Secret -->
+        <div id="view-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="view-modal-title">View Secret</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="view-content">
+                    <div class="view-field">
+                        <label>Label</label>
+                        <p id="view-label"></p>
+                    </div>
+                    <div class="view-field">
+                        <label>Type</label>
+                        <p id="view-type"></p>
+                    </div>
+                    <div class="view-field">
+                        <label>Secret Value</label>
+                        <div class="secret-value-container">
+                            <p id="view-secret" class="secret-value"></p>
+                            <button id="copy-secret-btn" class="btn btn-small">Copy</button>
+                            <button id="toggle-secret-btn" class="btn btn-small">Show</button>
+                        </div>
+                    </div>
+                    <div class="view-field">
+                        <label>Created</label>
+                        <p id="view-created"></p>
+                    </div>
+                    <div class="view-field">
+                        <label>Updated</label>
+                        <p id="view-updated"></p>
+                    </div>
+                    <div class="view-actions">
+                        <button id="edit-secret-btn" class="btn btn-primary">Edit</button>
+                        <button id="delete-secret-btn" class="btn btn-danger">Delete</button>
+                        <button class="btn btn-secondary modal-close-btn">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,9 +1,8 @@
-![pacli-logo](https://github.com/user-attachments/assets/742d776d-107a-495e-8bcf-5f68f25a087f)
+# 🔐 pacli - Secrets Management CLI
 
 ___
 
-# 🔐 pacli - Secrets Management CLI
-
+![pacli-logo](https://github.com/user-attachments/assets/742d776d-107a-495e-8bcf-5f68f25a087f)
 [![Build Status](https://github.com/imshakil/pacli/actions/workflows/release.yml/badge.svg)](https://github.com/imshakil/pacli/actions)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/imShakil/pacli/main.svg)](https://results.pre-commit.ci/latest/github/imShakil/pacli/main)
 [![PyPI version](https://img.shields.io/pypi/v/pacli-tool.svg)](https://pypi.org/project/pacli-tool/)
@@ -25,6 +24,7 @@ pacli is a secure, local-first secrets manager that stores your passwords, API k
 - URL shortening with [LinklyHQ](https://linklyhq.com/?via=ShakilOps) integration
 - Export list of secrets into JSON or CSV file
 - Easy-to-use command-line interface
+- **Web UI** for managing secrets through a modern web interface
 
 ## Installation
 
@@ -58,6 +58,7 @@ pacli --help
 | `cc`                   | Copy stdin content to clipboard                  |
 | `change-master-key`    | Change the master password without losing data   |
 | `export`               | Export secrets to JSON or CSV format             |
+| `web`                  | Launch the Web UI for managing secrets           |
 | `version`              | Show the current version of pacli                |
 
 ### Examples
@@ -107,6 +108,31 @@ echo "Hello World" | pacli cc
 # Copy API response to clipboard
 curl -s https://api.example.com/data | pacli cc
 ```
+
+## Web UI
+
+Launch the Web UI to manage your secrets through a modern, user-friendly interface:
+
+```sh
+# Start the Web UI (opens in your default browser)
+pacli web
+
+# Start on a custom host and port
+pacli web --host 0.0.0.0 --port 8080
+
+# Start without opening browser
+pacli web --no-browser
+```
+
+The Web UI provides:
+
+- 🔐 Master password authentication
+- 📋 View, add, edit, and delete secrets
+- 🔍 Search and filter secrets by type
+- 📋 Display secrets with creation/update timestamps
+- 👁️ Toggle secret visibility
+- 📋 Copy secrets to clipboard
+- 🎨 Responsive design for desktop and mobile
 
 ## Display Format
 

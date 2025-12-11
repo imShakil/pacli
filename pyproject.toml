@@ -12,7 +12,8 @@ dependencies = [
     "cryptography",
     "click",
     "requests",
-    "pyperclip"
+    "pyperclip",
+    "flask"
 ]
 keywords = ["cli", "secrets", "encryption", "password", "token", "clipboard", "security"]
 classifiers = [

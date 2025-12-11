@@ -11,18 +11,11 @@ logger = get_logger("pacli.commands.secrets")
 
 
 @click.command()
-@click.option("--token", is_flag=True, help="Use this flag to store a token instead of a secret.")
 @click.option(
-    "--pass",
-    "password_flag",
-    is_flag=True,
-    help="Use this flag to store a username and password instead of a token or generic secret.",
-)
-@click.option(
-    "--ssh",
-    "ssh_flag",
-    is_flag=True,
-    help="Use this flag to store SSH connection details (user:ip).",
+    "--type",
+    "-t",
+    type=click.Choice(["token", "password", "ssh"]),
+    help="Type of secret to store (token, password, ssh).",
 )
 @click.option("--key", "-k", "key_path", help="Path to SSH private key file.")
 @click.option("--port", "-p", "ssh_port", help="SSH port (default: 22).")
@@ -32,37 +25,31 @@ logger = get_logger("pacli.commands.secrets")
 @click.argument("arg2", required=False)
 @click.pass_context
 @master_password_required
-def add(ctx, token, password_flag, ssh_flag, key_path, ssh_port, ssh_opts, label, arg1, arg2):
-    """Add a secret with LABEL. Use --token for a token, --pass for username and password, or --ssh for SSH Server."""
+def add(ctx, type, key_path, ssh_port, ssh_opts, label, arg1, arg2):
+    """Add a secret with LABEL. Use --type to specify token, password, or ssh."""
     store = SecretStore()
 
-    # Auto-detect type if no flags specified
-    if not any([token, password_flag, ssh_flag]):
+    # Auto-detect type if not specified
+    if not type:
         if arg1 and ("@" in arg1 or (":" in arg1 and not arg1.count(":") > 1)):
-            ssh_flag = True
+            type = "ssh"
         elif arg1 and arg2:
-            password_flag = True
+            type = "password"
         else:
-            token = True
+            type = "token"
 
-    flags = [token, password_flag, ssh_flag]
-    if sum(flags) > 1:
-        logger.error("Multiple flags used together.")
-        click.echo("❌ You cannot use multiple flags at the same time.")
-        return
-
-    if token:
+    if type == "token":
         secret = arg1 if arg1 else getpass("🔐 Enter token: ")
         store.save_secret(label, secret, "token")
         logger.info(f"Token saved for label: {label}")
         click.echo("✅ Token saved.")
-    elif password_flag:
+    elif type == "password":
         username = arg1 if arg1 else click.prompt("Enter username")
         password = arg2 if arg2 else getpass("🔐 Enter password: ")
         store.save_secret(label, f"{username}:{password}", "password")
         logger.info(f"Username and password saved for label: {label}")
         click.echo(f"✅ {label} credentials saved.")
-    elif ssh_flag:
+    elif type == "ssh":
         if arg1:
             if "@" in arg1:
                 user_ip = arg1.replace("@", ":")
