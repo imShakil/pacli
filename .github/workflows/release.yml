@@ -83,3 +83,8 @@ jobs:
   pypi-publish:
     needs: build-and-release
     uses: ./.github/workflows/pypi-publish.yml
+    permissions:
+      id-token: write
+    secrets: inherit
+    with:
+      artifact-name: release-dists
