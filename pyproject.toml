@@ -13,7 +13,10 @@ dependencies = [
     "click",
     "requests",
     "pyperclip",
-    "flask"
+    "flask",
+    "flask-socketio",
+    "paramiko",
+    "python-socketio"
 ]
 keywords = ["cli", "secrets", "encryption", "password", "token", "clipboard", "security"]
 classifiers = [

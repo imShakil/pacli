@@ -53,6 +53,9 @@
                             <button id="add-secret-btn" class="btn btn-primary btn-block">
                                 + Add Secret
                             </button>
+                            <button id="ssh-terminal-btn" class="btn btn-secondary btn-block" style="margin-top: 10px;">
+                                🖥️ SSH Terminal
+                            </button>
                         </div>
                         <div class="sidebar-section">
                             <h3>Filter by Type</h3>
@@ -149,8 +152,8 @@
                         <label>Secret Value</label>
                         <div class="secret-value-container">
                             <p id="view-secret" class="secret-value"></p>
-                            <button id="copy-secret-btn" class="btn btn-small">Copy</button>
                             <button id="toggle-secret-btn" class="btn btn-small">Show</button>
+                            <button id="copy-secret-btn" class="btn btn-small" style="display: none;">📋 Copy</button>
                         </div>
                     </div>
                     <div class="view-field">
@@ -169,8 +172,79 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal for SSH Terminal -->
+        <div id="ssh-modal" class="modal">
+            <div class="modal-content ssh-modal-content">
+                <div class="modal-header">
+                    <h2>🖥️ SSH Terminal</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="ssh-content">
+                    <div class="ssh-tabs">
+                        <button class="ssh-tab-btn active" data-tab="manual">Manual Connection</button>
+                        <button class="ssh-tab-btn" data-tab="stored">Stored Servers</button>
+                    </div>
+                    <div id="ssh-connection-form" class="ssh-form ssh-tab-content active" data-tab="manual">
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">Connect to an SSH server with manual configuration. You can select a stored SSH key or paste one directly.</p>
+                        <div class="form-group">
+                            <label for="ssh-hostname">Hostname</label>
+                            <input type="text" id="ssh-hostname" placeholder="e.g., example.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ssh-username">Username</label>
+                            <input type="text" id="ssh-username" placeholder="e.g., root" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ssh-port">Port</label>
+                            <input type="number" id="ssh-port" value="22" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ssh-auth-type">Authentication</label>
+                            <select id="ssh-auth-type" required>
+                                <option value="password">Password</option>
+                                <option value="key">SSH Key</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="ssh-password-group">
+                            <label for="ssh-password">Password</label>
+                            <input type="password" id="ssh-password" placeholder="SSH password">
+                        </div>
+                        <div class="form-group" id="ssh-key-group" style="display: none;">
+                            <label for="ssh-key-select">Select SSH Key from Secrets</label>
+                            <select id="ssh-key-select" required>
+                                <option value="">Select SSH key from secrets...</option>
+                            </select>
+                            <label for="ssh-key-input" style="margin-top: 10px;">Or Paste SSH Private Key</label>
+                            <textarea id="ssh-key-input" placeholder="Paste your SSH private key here" rows="6"></textarea>
+                        </div>
+                        <button id="ssh-connect-btn" class="btn btn-primary btn-block">Connect</button>
+                        <div id="ssh-form-error" class="error-message"></div>
+                    </div>
+                    <div id="ssh-stored-form" class="ssh-form ssh-tab-content" data-tab="stored">
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">Connect to a pre-configured SSH server. SSH secrets must be stored in the format: <code style="background: #f0f0f0; padding: 2px 4px;">user:host|port:22</code></p>
+                        <div class="form-group">
+                            <label for="ssh-stored-select">Select SSH Server</label>
+                            <select id="ssh-stored-select" required>
+                                <option value="">Select a stored SSH server...</option>
+                            </select>
+                        </div>
+                        <button id="ssh-stored-connect-btn" class="btn btn-primary btn-block">Connect</button>
+                        <div id="ssh-stored-form-error" class="error-message"></div>
+                    </div>
+                    <div id="ssh-terminal" class="ssh-terminal" style="display: none;">
+                        <div id="ssh-output" class="ssh-output"></div>
+                        <div class="ssh-input-group">
+                            <input type="text" id="ssh-command-input" class="ssh-command-input" placeholder="Enter command..." disabled>
+                            <button id="ssh-disconnect-btn" class="btn btn-danger">Disconnect</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

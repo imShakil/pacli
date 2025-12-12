@@ -459,14 +459,19 @@ body {
     font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
     font-size: 0.875rem;
     letter-spacing: 2px;
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
 }
 
 .secret-value.hidden {
     letter-spacing: 0;
+    color: var(--text-muted);
 }
 
 .secret-value.hidden::after {
-    content: "••••••••";
+    content: "••••••••••••••••";
+    font-weight: 600;
 }
 
 /* Messages */
@@ -498,6 +503,144 @@ body {
     display: block;
 }
 
+/* SSH Terminal */
+.ssh-modal-content {
+    max-width: 900px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.ssh-content {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.ssh-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.ssh-tab-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.ssh-tab-btn:hover {
+    color: var(--text-color);
+}
+
+.ssh-tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.ssh-tab-content {
+    display: none !important;
+}
+
+.ssh-tab-content.active {
+    display: grid !important;
+}
+
+.ssh-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.ssh-form .form-group {
+    grid-column: auto;
+}
+
+.ssh-form .btn-block {
+    grid-column: 1 / -1;
+}
+
+.ssh-terminal {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+    overflow: hidden;
+    flex: 1;
+    min-height: 400px;
+}
+
+.ssh-output {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.ssh-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.ssh-output::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+.ssh-output::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+.ssh-output::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+
+.ssh-input-group {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-top: 1px solid #2d2d2d;
+    background: #252526;
+}
+
+.ssh-command-input {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid #3e3e42;
+    border-radius: 4px;
+    background: #3c3c3c;
+    color: #d4d4d4;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+    font-size: 0.875rem;
+}
+
+.ssh-command-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.ssh-command-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .main-content {
@@ -523,6 +666,14 @@ body {
         flex-direction: column;
         gap: 1rem;
         align-items: flex-start;
+    }
+
+    .ssh-form {
+        grid-template-columns: 1fr;
+    }
+
+    .ssh-form .btn-block {
+        grid-column: auto;
     }
 }
 

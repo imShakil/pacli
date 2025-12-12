@@ -27,7 +27,7 @@ logger = get_logger("pacli.web")
 def web(host, port, no_browser):
     """Launch the Web UI for pacli."""
     try:
-        app = create_app()
+        app, socketio = create_app()
 
         # Set Flask environment
         os.environ["FLASK_ENV"] = "production"
@@ -52,7 +52,7 @@ def web(host, port, no_browser):
         click.echo(f"🔐 pacli Web UI starting at {url}")
         click.echo("Press Ctrl+C to stop the server")
 
-        app.run(host=host, port=port, debug=False)
+        socketio.run(app, host=host, port=port, debug=False)
     except Exception as e:
         logger.error(f"Failed to start web UI: {e}")
         click.echo(f"Error: {e}", err=True)
