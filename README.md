@@ -26,6 +26,16 @@ pacli is a secure, local-first secrets manager that stores your passwords, API k
 - Easy-to-use command-line interface
 - **Web UI** for managing secrets through a modern web interface
 
+## Sonarqube Code Quality Metrics
+
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=coverage)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
+
 ## Installation
 
 ```sh
@@ -110,6 +120,8 @@ curl -s https://api.example.com/data | pacli cc
 ```
 
 ## Web UI
+
+[![Web UI](https://mhosen.com/projects/pacli/pacli-web-ui.png)](https://mhosen.com/projects/pacli---secrets-management-cli)
 
 Launch the Web UI to manage your secrets through a modern, user-friendly interface:
 
