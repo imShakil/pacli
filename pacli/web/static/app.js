@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initTheme() {
   let theme = localStorage.getItem('pacli.theme');
   if (!theme) {
-    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+    theme = globalThis.matchMedia?.('(prefers-color-scheme: light)').matches
       ? 'light'
       : 'dark';
   }

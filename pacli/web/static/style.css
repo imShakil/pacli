@@ -377,7 +377,7 @@ label {
 .alert-error {
     background: rgba(248, 113, 113, .1);
     border-color: rgba(248, 113, 113, .3);
-    color: #fca5a5;
+    color: #f87171;
 }
 
 .alert-success {
@@ -1511,6 +1511,12 @@ label {
     backdrop-filter: blur(4px);
     z-index: 300;
     animation: fadeIn .18s ease;
+    /* reset native button styles */
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    cursor: default;
+    appearance: none;
 }
 
 .mobile-drawer {

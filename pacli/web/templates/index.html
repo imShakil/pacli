@@ -111,6 +111,13 @@
             <input type="text" id="search-input" placeholder="Search labels…" oninput="doSearch(this.value)" />
           </div>
         </div>
+        <div class="sidebar-shortcuts">
+          <div class="sidebar-section-title">Shortcuts</div>
+          <div class="shortcut-list">
+            <span class="shortcut-item"><kbd class="kbd">⌘N</kbd> Add secret</span>
+            <span class="shortcut-item"><kbd class="kbd">Esc</kbd> Close modal</span>
+          </div>
+        </div>
       </aside>
       <main class="main">
         <div id="secrets-grid" class="secrets-grid"></div>
@@ -393,7 +400,7 @@
   </div>
 
   <!-- Mobile menu drawer -->
-  <div id="mobile-drawer-overlay" class="mobile-drawer-overlay hidden" onclick="closeMobileMenu()"></div>
+  <button id="mobile-drawer-overlay" class="mobile-drawer-overlay hidden" onclick="closeMobileMenu()" aria-label="Close menu" tabindex="0"></button>
   <div id="mobile-drawer" class="mobile-drawer hidden">
     <div class="mobile-drawer-header">
       <span class="topbar-brand"><span>🔐</span> pacli</span>
@@ -426,9 +433,8 @@
       renderSecretTypeForm(type);
     }
 
-    function bindBackdropClose(backdropId, closeFnName) {
+    function bindBackdropClose(backdropId, closeFn) {
       const backdrop = document.getElementById(backdropId);
-      const closeFn = window[closeFnName];
       if (!backdrop || typeof closeFn !== 'function') return;
       backdrop.addEventListener('click', (event) => {
         if (event.target === backdrop) closeFn();
@@ -442,11 +448,11 @@
       zone.addEventListener('click', () => fileInput.click());
     }
 
-    bindBackdropClose('edit-backdrop', 'closeEditModal');
-    bindBackdropClose('view-backdrop', 'closeViewModal');
-    bindBackdropClose('ssh-backdrop', 'closeSSHModal');
-    bindBackdropClose('env-backdrop', 'closeEnvModal');
-    bindBackdropClose('backup-backdrop', 'closeBackupModal');
+    bindBackdropClose('edit-backdrop',   closeEditModal);
+    bindBackdropClose('view-backdrop',   closeViewModal);
+    bindBackdropClose('ssh-backdrop',    closeSSHModal);
+    bindBackdropClose('env-backdrop',    closeEnvModal);
+    bindBackdropClose('backup-backdrop', closeBackupModal);
     bindFilePicker('env-upload-zone', 'env-file-input');
     bindFilePicker('upload-zone', 'backup-file-input');
   </script>
