@@ -1,6 +1,4 @@
 import click
-
-# import os
 from ..log import get_logger
 
 __name__ = "pacli.commands.ai"

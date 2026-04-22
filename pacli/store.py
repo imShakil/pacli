@@ -12,8 +12,6 @@ from cryptography.hazmat.backends import default_backend
 from getpass import getpass
 from .log import get_logger
 
-# Salt and Fernet key management: store/load salt from ~/.config/pacli/salt.bin and derive key from master password
-
 SALT_PATH = os.path.expanduser("~/.config/pacli/salt.bin")
 PASSWORD_HASH_PATH = os.path.expanduser("~/.config/pacli/password_hash.bin")
 logger = get_logger("pacli.store")
@@ -36,8 +34,8 @@ class SecretStore:
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._local = threading.local()
         self.fernet = None
-        # Initialize the database schema
-        self._get_conn().execute("""
+        self._get_conn().execute(
+            """
             CREATE TABLE IF NOT EXISTS secrets (
                 id TEXT PRIMARY KEY,
                 label TEXT,
@@ -50,20 +48,45 @@ class SecretStore:
         self._get_conn().commit()
 
     def _get_conn(self):
-        """Get a thread-local database connection."""
         if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         return self._local.conn
 
     @property
     def conn(self):
-        """Property to access the thread-local connection."""
         return self._get_conn()
 
     def is_master_set(self):
         return os.path.exists(SALT_PATH + ".set")
 
+    def setup_first_run(self):
+        """
+        Triggered automatically on first ever use — no `pacli init` needed.
+        Prompts the user to create a master password interactively.
+        """
+        print("\n🔐 Welcome to pacli! Set up your master password to get started.")
+        print("This password encrypts all your secrets — keep it safe.\n")
+        salt = get_salt()
+        while True:
+            pw1 = getpass("Set a master password: ")
+            if not pw1:
+                print("Password cannot be empty. Try again.")
+                continue
+            pw2 = getpass("Confirm master password: ")
+            if pw1 == pw2:
+                break
+            print("Passwords do not match. Try again.")
+        with open(SALT_PATH + ".set", "w") as f:
+            f.write("set")
+        password_hash = hashlib.sha256(pw1.encode()).hexdigest()
+        with open(PASSWORD_HASH_PATH, "w") as f:
+            f.write(password_hash)
+        self.fernet = self._derive_fernet(pw1, salt)
+        logger.info("Master password set on first run.")
+        print("\n✅ Master password set. You're ready to go!\n")
+
     def set_master_password(self):
+        """Explicit init path — still used by `pacli init`."""
         salt = get_salt()
         while True:
             pw1 = getpass("Set a master password: ")
@@ -73,18 +96,19 @@ class SecretStore:
             print("Passwords do not match or empty. Try again.")
         with open(SALT_PATH + ".set", "w") as f:
             f.write("set")
-        # Store password hash for verification
         password_hash = hashlib.sha256(pw1.encode()).hexdigest()
         with open(PASSWORD_HASH_PATH, "w") as f:
             f.write(password_hash)
         self.fernet = self._derive_fernet(pw1, salt)
-        SecretStore._session_fernet = self.fernet
         logger.info("Master password set.")
 
     def update_master_password(self, new_password):
         salt = get_salt()
         self.fernet = self._derive_fernet(new_password, salt)
-        logger.info("Master password updated...")
+        password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+        with open(PASSWORD_HASH_PATH, "w") as f:
+            f.write(password_hash)
+        logger.info("Master password updated.")
 
     def _derive_fernet(self, password, salt):
         kdf = PBKDF2HMAC(
@@ -97,15 +121,22 @@ class SecretStore:
         key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
         return Fernet(key)
 
-    def require_fernet(self, password=None):
+    def require_fernet(self, password=None, interactive=True):
+        """
+        Ensures the Fernet key is ready.
+        On first-ever run (no master set) triggers interactive setup automatically.
+        """
         if not self.is_master_set():
-            raise RuntimeError('Master password not set. Run "pacli init" first.')
+            self.setup_first_run()
+            return
         if self.fernet is not None:
             return
         salt = get_salt()
         if password is None:
             password = os.environ.get("PACLI_MASTER_PASSWORD")
         if password is None:
+            if not interactive:
+                raise RuntimeError("Master key is not loaded")
             password = getpass("Enter master password: ")
         self.fernet = self._derive_fernet(password, salt)
 
@@ -113,7 +144,7 @@ class SecretStore:
         self.require_fernet()
         encrypted = self.fernet.encrypt(secret.encode()).decode()
         now = int(time.time())
-        new_id = uuid.uuid4().hex[:8]  # 8-character unique ID
+        new_id = uuid.uuid4().hex[:8]
         self.conn.execute(
             "INSERT INTO secrets (id, label, value_encrypted, type, creation_time, update_time) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -125,7 +156,7 @@ class SecretStore:
         self.require_fernet()
         try:
             cursor = self.conn.execute(
-                "SELECT value_encrypted, type FROM secrets WHERE label = ? " "ORDER BY rowid DESC LIMIT 1",
+                "SELECT value_encrypted, type FROM secrets WHERE label = ? ORDER BY rowid DESC LIMIT 1",
                 (label,),
             )
             row = cursor.fetchone()
@@ -136,9 +167,7 @@ class SecretStore:
                 except Exception as e:
                     logger.error(f"Decryption failed for label {label}: {e}")
                     return None, None
-            else:
-                logger.info(f"Secret not found for label: {label}")
-                return None, None
+            return None, None
         except Exception as e:
             logger.error(f"Database error on get_secret for {label}: {e}")
             return None, None
@@ -164,7 +193,7 @@ class SecretStore:
     def get_secret_by_id(self, id):
         self.require_fernet()
         cursor = self.conn.execute(
-            "SELECT label, value_encrypted, type, creation_time, update_time FROM secrets " "WHERE id = ?",
+            "SELECT label, value_encrypted, type, creation_time, update_time FROM secrets WHERE id = ?",
             (id,),
         )
         row = cursor.fetchone()
@@ -182,9 +211,8 @@ class SecretStore:
             except Exception as e:
                 logger.error(f"Decryption failed for id {id}: {e}")
                 return None
-        else:
-            logger.info(f"No secret found with id: {id}")
-            return None
+        logger.info(f"No secret found with id: {id}")
+        return None
 
     def get_secrets_by_label(self, label):
         self.require_fernet()
@@ -212,17 +240,11 @@ class SecretStore:
 
     def verify_master_password(self, password):
         try:
-            # First, try to verify against stored password hash
             if os.path.exists(PASSWORD_HASH_PATH):
                 with open(PASSWORD_HASH_PATH, "r") as f:
                     stored_hash = f.read().strip()
-                password_hash = hashlib.sha256(password.encode()).hexdigest()
-                if password_hash == stored_hash:
-                    return True
-                else:
-                    return False
-
-            # Fallback: try to decrypt an existing secret to verify password
+                return hashlib.sha256(password.encode()).hexdigest() == stored_hash
+            # Fallback: attempt decryption
             salt = get_salt()
             test_fernet = self._derive_fernet(password, salt)
             cursor = self.conn.execute("SELECT value_encrypted FROM secrets LIMIT 1")
@@ -230,9 +252,100 @@ class SecretStore:
             if row:
                 test_fernet.decrypt(row[0].encode())
                 return True
-            else:
-                # If no secrets exist and no hash file, password cannot be verified
-                return False
+            return False
         except Exception as e:
             logger.error(f"Master password verification failed: {e}")
             return False
+
+    # ------------------------------------------------------------------
+    # Encrypted Cloud Backup / Restore
+    # ------------------------------------------------------------------
+
+    def export_encrypted_backup(self, backup_password: str) -> bytes:
+        """
+        Serialise all secrets to JSON, then encrypt with a separate
+        backup password derived from the same salt.
+        Safe to upload to cloud storage.
+        """
+        import json
+
+        self.require_fernet()
+        salt = get_salt()
+        backup_fernet = self._derive_fernet(backup_password, salt)
+
+        records = []
+        for row in self.conn.execute(
+            "SELECT id, label, value_encrypted, type, creation_time, update_time FROM secrets"
+        ):
+            try:
+                plain = self.fernet.decrypt(row[2].encode()).decode()
+            except Exception as e:
+                logger.error(f"Skipping {row[0]} during backup: {e}")
+                continue
+            records.append(
+                {
+                    "id": row[0],
+                    "label": row[1],
+                    "secret": plain,
+                    "type": row[3],
+                    "creation_time": row[4],
+                    "update_time": row[5],
+                }
+            )
+
+        payload = json.dumps(records).encode()
+        return backup_fernet.encrypt(payload)
+
+    def import_encrypted_backup(self, blob: bytes, backup_password: str, merge: bool = True) -> dict:
+        """
+        Decrypt a backup blob and import secrets.
+
+        Args:
+            blob: Encrypted backup bytes (.pacli file)
+            backup_password: Password used when backup was created
+            merge: True = skip duplicates; False = overwrite
+
+        Returns:
+            {"imported": int, "skipped": int, "errors": int}
+        """
+        import json
+
+        self.require_fernet()
+        salt = get_salt()
+        backup_fernet = self._derive_fernet(backup_password, salt)
+
+        try:
+            payload = backup_fernet.decrypt(blob)
+        except Exception:
+            raise ValueError("Wrong backup password or corrupted file.")
+
+        records = json.loads(payload.decode())
+        stats = {"imported": 0, "skipped": 0, "errors": 0}
+
+        for rec in records:
+            try:
+                existing = self.conn.execute("SELECT id FROM secrets WHERE id = ?", (rec["id"],)).fetchone()
+                encrypted = self.fernet.encrypt(rec["secret"].encode()).decode()
+
+                if existing:
+                    if merge:
+                        stats["skipped"] += 1
+                        continue
+                    self.conn.execute(
+                        "UPDATE secrets SET label=?, value_encrypted=?, type=?, "
+                        "creation_time=?, update_time=? WHERE id=?",
+                        (rec["label"], encrypted, rec["type"], rec["creation_time"], rec["update_time"], rec["id"]),
+                    )
+                else:
+                    self.conn.execute(
+                        "INSERT INTO secrets (id, label, value_encrypted, type, creation_time, update_time) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (rec["id"], rec["label"], encrypted, rec["type"], rec["creation_time"], rec["update_time"]),
+                    )
+                stats["imported"] += 1
+            except Exception as e:
+                logger.error(f"Error importing {rec.get('id')}: {e}")
+                stats["errors"] += 1
+
+        self.conn.commit()
+        return stats

@@ -38,8 +38,59 @@ pacli is a secure, local-first secrets manager that stores your passwords, API k
 
 ## Installation
 
+### Recommended: pipx (isolated, no conflicts)
+
+[pipx](https://pipx.pypa.io/) installs CLI tools in their own isolated environments and makes them available system-wide. This is the safest and cleanest approach.
+
+```sh
+# Install pipx if you don't have it
+pip install pipx
+pipx ensurepath
+
+# Install pacli
+pipx install pacli-tool
+```
+
+### Standard pip
+
 ```sh
 pip install pacli-tool
+```
+
+> **Note for Ubuntu 23+, Debian 12+, and other modern Linux distros:** Your system Python may be externally managed (PEP 668) and block pip installs by default. Use one of the alternatives below.
+
+### Modern Linux (externally managed Python)
+
+If you get an `externally-managed-environment` error, choose one of these:
+
+```sh
+# Use a virtual environment (safest for system Python)
+python3 -m venv ~/.venv/pacli
+~/.venv/pacli/bin/pip install pacli-tool
+
+# Then add the binary to your PATH
+echo 'export PATH="$HOME/.venv/pacli/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Install from source
+
+```sh
+git clone https://github.com/imshakil/pacli.git
+cd pacli
+pip install -e .
+```
+
+Or directly from GitHub without cloning:
+
+```sh
+pip install git+https://github.com/imshakil/pacli.git
+```
+
+### Verify installation
+
+```sh
+pacli --help
 ```
 
 ## Usage
@@ -68,7 +119,7 @@ pacli --help
 | `cc`                   | Copy stdin content to clipboard                  |
 | `change-master-key`    | Change the master password without losing data   |
 | `export`               | Export secrets to JSON or CSV format             |
-| `web`                  | Launch the Web UI for managing secrets           |
+| `web`                  | Launch/manage the Web UI for managing secrets    |
 | `version`              | Show the current version of pacli                |
 
 ### Examples
@@ -129,11 +180,26 @@ Launch the Web UI to manage your secrets through a modern, user-friendly interfa
 # Start the Web UI (opens in your default browser)
 pacli web
 
+# Start in background mode
+pacli web start
+
+# Stop background mode
+pacli web stop
+
+# Check background status
+pacli web status
+
 # Start on a custom host and port
 pacli web --host 0.0.0.0 --port 8080
 
+# Start in background on custom host and port
+pacli web start --host 0.0.0.0 --port 8080
+
 # Start without opening browser
 pacli web --no-browser
+
+# Start in background without opening browser
+pacli web start --no-browser
 ```
 
 The Web UI provides:
