@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 from datetime import datetime
+from urllib.parse import urlparse
 from ..store import SecretStore
 from ..log import get_logger
 from .ssh_handler import SSHConnectionManager
@@ -23,8 +24,54 @@ def create_app():
 
     store = SecretStore()
     ssh_manager = SSHConnectionManager()
-    socketio = SocketIO(app, cors_allowed_origins="*")
+    socketio = SocketIO(app)
 
+    _register_csrf_same_origin_protection(app)
+    require_auth = _build_require_auth(store)
+
+    _register_page_routes(app)
+    _register_auth_routes(app, store)
+    _register_secret_routes(app, store, require_auth)
+    _register_backup_routes(app, store, require_auth)
+    _register_ssh_rest_routes(app, store, ssh_manager, require_auth)
+    _register_socket_handlers(socketio, store, ssh_manager)
+
+    return app, socketio
+
+
+def _is_same_origin(source_url, host_url):
+    if not source_url:
+        return False
+    source = urlparse(source_url)
+    host = urlparse(host_url)
+    return source.scheme == host.scheme and source.netloc == host.netloc
+
+
+def _register_csrf_same_origin_protection(app):
+    @app.before_request
+    def _csrf_same_origin_protection():
+        if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+            return None
+        if request.path.startswith("/socket.io"):
+            return None
+
+        origin = request.headers.get("Origin")
+        referer = request.headers.get("Referer")
+        request_source = origin or referer
+
+        if _is_same_origin(request_source, request.host_url):
+            return None
+
+        logger.warning(
+            "Rejected state-changing request due to CSRF origin check failure: path=%s origin=%s referer=%s",
+            request.path,
+            origin,
+            referer,
+        )
+        return jsonify({"error": "CSRF validation failed"}), 403
+
+
+def _build_require_auth(store):
     def require_auth(f):
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -37,22 +84,42 @@ def create_app():
 
         return decorated
 
-    # ------------------------------------------------------------------
-    # Pages
-    # ------------------------------------------------------------------
+    return require_auth
 
-    @app.route("/")
+
+def _serialize_secret_row(secret_row):
+    return {
+        "id": secret_row[0],
+        "label": secret_row[1],
+        "type": secret_row[2],
+        "creation_time": secret_row[3],
+        "update_time": secret_row[4],
+        "creation_date": datetime.fromtimestamp(secret_row[3]).strftime("%Y-%m-%d %H:%M"),
+        "update_date": datetime.fromtimestamp(secret_row[4]).strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def _register_page_routes(app):
+    @app.route("/", methods=["GET"])
     def index():
         return render_template("index.html")
 
-    # ------------------------------------------------------------------
-    # Auth
-    # ------------------------------------------------------------------
 
+def _register_auth_routes(app, store):
+    _register_setup_status_route(app, store)
+    _register_setup_init_route(app, store)
+    _register_auth_check_route(app, store)
+    _register_auth_login_route(app, store)
+    _register_auth_logout_route(app)
+
+
+def _register_setup_status_route(app, store):
     @app.route("/api/setup/status", methods=["GET"])
     def setup_status():
         return jsonify({"configured": store.is_master_set()})
 
+
+def _register_setup_init_route(app, store):
     @app.route("/api/setup/init", methods=["POST"])
     def setup_init():
         if store.is_master_set():
@@ -83,6 +150,8 @@ def create_app():
         logger.info("Master password set via Web UI.")
         return jsonify({"success": True})
 
+
+def _register_auth_check_route(app, store):
     @app.route("/api/auth/check", methods=["GET"])
     def check_auth():
         authenticated = "authenticated" in session and store.fernet is not None
@@ -95,6 +164,8 @@ def create_app():
             }
         )
 
+
+def _register_auth_login_route(app, store):
     @app.route("/api/auth/login", methods=["POST"])
     def login():
         data = request.get_json()
@@ -110,40 +181,37 @@ def create_app():
             return jsonify({"success": True})
         return jsonify({"error": "Invalid master password"}), 401
 
+
+def _register_auth_logout_route(app):
     @app.route("/api/auth/logout", methods=["POST"])
     def logout():
         session.clear()
         return jsonify({"success": True})
 
-    # ------------------------------------------------------------------
-    # Secrets
-    # ------------------------------------------------------------------
 
+def _register_secret_routes(app, store, require_auth):
+    _register_get_secrets_route(app, store, require_auth)
+    _register_get_secret_route(app, store, require_auth)
+    _register_reveal_secret_route(app, store, require_auth)
+    _register_create_secret_route(app, store, require_auth)
+    _register_update_secret_route(app, store, require_auth)
+    _register_delete_secret_route(app, store, require_auth)
+    _register_search_secrets_route(app, store, require_auth)
+
+
+def _register_get_secrets_route(app, store, require_auth):
     @app.route("/api/secrets", methods=["GET"])
     @require_auth
     def get_secrets():
         try:
             secrets = store.list_secrets()
-            return jsonify(
-                {
-                    "secrets": [
-                        {
-                            "id": s[0],
-                            "label": s[1],
-                            "type": s[2],
-                            "creation_time": s[3],
-                            "update_time": s[4],
-                            "creation_date": datetime.fromtimestamp(s[3]).strftime("%Y-%m-%d %H:%M"),
-                            "update_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M"),
-                        }
-                        for s in secrets
-                    ]
-                }
-            )
+            return jsonify({"secrets": [_serialize_secret_row(s) for s in secrets]})
         except Exception as e:
             logger.error(f"Error getting secrets: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_get_secret_route(app, store, require_auth):
     @app.route("/api/secrets/<secret_id>", methods=["GET"])
     @require_auth
     def get_secret(secret_id):
@@ -164,6 +232,8 @@ def create_app():
             logger.error(f"Error getting secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_reveal_secret_route(app, store, require_auth):
     @app.route("/api/secrets/<secret_id>/reveal", methods=["GET"])
     @require_auth
     def reveal_secret(secret_id):
@@ -182,6 +252,8 @@ def create_app():
             logger.error(f"Error revealing secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_create_secret_route(app, store, require_auth):
     @app.route("/api/secrets", methods=["POST"])
     @require_auth
     def create_secret():
@@ -200,6 +272,8 @@ def create_app():
             logger.error(f"Error creating secret: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_update_secret_route(app, store, require_auth):
     @app.route("/api/secrets/<secret_id>", methods=["PUT"])
     @require_auth
     def update_secret(secret_id):
@@ -214,6 +288,8 @@ def create_app():
             logger.error(f"Error updating secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_delete_secret_route(app, store, require_auth):
     @app.route("/api/secrets/<secret_id>", methods=["DELETE"])
     @require_auth
     def delete_secret(secret_id):
@@ -224,6 +300,8 @@ def create_app():
             logger.error(f"Error deleting secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_search_secrets_route(app, store, require_auth):
     @app.route("/api/secrets/search", methods=["GET"])
     @require_auth
     def search_secrets():
@@ -232,28 +310,14 @@ def create_app():
             if not query:
                 return jsonify({"secrets": []})
             secrets = store.list_secrets()
-            filtered = [
-                {
-                    "id": s[0],
-                    "label": s[1],
-                    "type": s[2],
-                    "creation_time": s[3],
-                    "update_time": s[4],
-                    "creation_date": datetime.fromtimestamp(s[3]).strftime("%Y-%m-%d %H:%M"),
-                    "update_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M"),
-                }
-                for s in secrets
-                if query in s[1].lower()
-            ]
+            filtered = [_serialize_secret_row(s) for s in secrets if query in s[1].lower()]
             return jsonify({"secrets": filtered})
         except Exception as e:
             logger.error(f"Error searching secrets: {e}")
             return jsonify({"error": str(e)}), 500
 
-    # ------------------------------------------------------------------
-    # Backup
-    # ------------------------------------------------------------------
 
+def _register_backup_routes(app, store, require_auth):
     @app.route("/api/backup/export", methods=["POST"])
     @require_auth
     def api_backup_export():
@@ -282,8 +346,8 @@ def create_app():
             overwrite = request.form.get("overwrite", "false").lower() == "true"
             if "file" not in request.files:
                 return jsonify({"error": "No file uploaded"}), 400
-            f = request.files["file"]
-            blob = f.read()
+            file_obj = request.files["file"]
+            blob = file_obj.read()
             stats = store.import_encrypted_backup(blob, backup_password, merge=not overwrite)
             return jsonify({"success": True, **stats})
         except ValueError as e:
@@ -292,10 +356,15 @@ def create_app():
             logger.error(f"Backup import failed: {e}")
             return jsonify({"error": str(e)}), 500
 
-    # ------------------------------------------------------------------
-    # SSH REST endpoints (fallback when WebSocket unavailable)
-    # ------------------------------------------------------------------
 
+def _register_ssh_rest_routes(app, store, ssh_manager, require_auth):
+    _register_ssh_connect_route(app, store, ssh_manager, require_auth)
+    _register_ssh_disconnect_route(app, ssh_manager, require_auth)
+    _register_ssh_execute_route(app, ssh_manager, require_auth)
+    _register_ssh_output_route(app, ssh_manager, require_auth)
+
+
+def _register_ssh_connect_route(app, store, ssh_manager, require_auth):
     @app.route("/api/ssh/connect", methods=["POST"])
     @require_auth
     def ssh_connect():
@@ -305,13 +374,8 @@ def create_app():
 
             if key_id and not hostname:
                 result = _resolve_stored_ssh(store, key_id)
-                if (
-                    isinstance(result, tuple)
-                    and len(result) == 2
-                    and isinstance(result[0], str)
-                    and result[0].startswith("error:")
-                ):
-                    return jsonify({"error": result[0][6:]}), 400
+                if isinstance(result, str) and result.startswith("error:"):
+                    return jsonify({"error": result[6:]}), 400
                 username, hostname, port = result
 
             if not hostname or not username:
@@ -337,6 +401,8 @@ def create_app():
             logger.error(f"SSH connect error: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_ssh_disconnect_route(app, ssh_manager, require_auth):
     @app.route("/api/ssh/disconnect/<connection_id>", methods=["POST"])
     @require_auth
     def ssh_disconnect(connection_id):
@@ -346,6 +412,8 @@ def create_app():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+
+def _register_ssh_execute_route(app, ssh_manager, require_auth):
     @app.route("/api/ssh/execute", methods=["POST"])
     @require_auth
     def ssh_execute():
@@ -363,7 +431,6 @@ def create_app():
             if terminal.send_command(command + "\n"):
                 import time
 
-                # Wait a bit longer for output to arrive
                 time.sleep(0.4)
                 output = terminal.get_output()
                 return jsonify({"success": True, "output": output})
@@ -371,10 +438,12 @@ def create_app():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+
+def _register_ssh_output_route(app, ssh_manager, require_auth):
     @app.route("/api/ssh/output/<connection_id>", methods=["GET"])
     @require_auth
     def ssh_get_output(connection_id):
-        """Poll endpoint for SSH output — used by REST fallback mode."""
+        """Poll endpoint for SSH output - used by REST fallback mode."""
         try:
             terminal = ssh_manager.get_connection(connection_id)
             if not terminal:
@@ -390,18 +459,28 @@ def create_app():
         except Exception as e:
             return jsonify({"output": "", "disconnected": True, "error": str(e)})
 
-    # ------------------------------------------------------------------
-    # WebSocket SSH
-    # ------------------------------------------------------------------
 
+def _register_socket_handlers(socketio, store, ssh_manager):
+    _register_socket_connect_handler(socketio)
+    _register_socket_disconnect_handler(socketio)
+    _register_socket_ssh_connect_handler(socketio, store, ssh_manager)
+    _register_socket_ssh_command_handler(socketio, ssh_manager)
+    _register_socket_ssh_disconnect_handler(socketio, ssh_manager)
+
+
+def _register_socket_connect_handler(socketio):
     @socketio.on("connect")
     def handle_connect():
         emit("response", {"data": "Connected"})
 
+
+def _register_socket_disconnect_handler(socketio):
     @socketio.on("disconnect")
     def handle_disconnect():
         logger.info("WebSocket client disconnected")
 
+
+def _register_socket_ssh_connect_handler(socketio, store, ssh_manager):
     @socketio.on("ssh_connect")
     def handle_ssh_connect(data):
         if "authenticated" not in session:
@@ -442,7 +521,6 @@ def create_app():
                         "message": f"Connected to {username}@{hostname}:{port}",
                     },
                 )
-                # Start streaming output to client
                 _start_output_streaming(socketio, ssh_manager, connection_id)
             else:
                 emit("error", {"message": "SSH connection failed. Check credentials and host."})
@@ -450,6 +528,8 @@ def create_app():
             logger.error(f"WS SSH connect error: {e}")
             emit("error", {"message": str(e)})
 
+
+def _register_socket_ssh_command_handler(socketio, ssh_manager):
     @socketio.on("ssh_command")
     def handle_ssh_command(data):
         try:
@@ -465,10 +545,11 @@ def create_app():
                 return
 
             terminal.send_command(command + "\n")
-            # Output will be streamed via the background thread started on connect
         except Exception as e:
             emit("error", {"message": str(e)})
 
+
+def _register_socket_ssh_disconnect_handler(socketio, ssh_manager):
     @socketio.on("ssh_disconnect")
     def handle_ssh_disconnect(data):
         try:
@@ -485,8 +566,6 @@ def create_app():
                 )
         except Exception as e:
             emit("error", {"message": str(e)})
-
-    return app, socketio
 
 
 # ------------------------------------------------------------------
