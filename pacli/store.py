@@ -34,8 +34,7 @@ class SecretStore:
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._local = threading.local()
         self.fernet = None
-        self._get_conn().execute(
-            """
+        self._get_conn().execute("""
             CREATE TABLE IF NOT EXISTS secrets (
                 id TEXT PRIMARY KEY,
                 label TEXT,
@@ -44,8 +43,7 @@ class SecretStore:
                 creation_time INTEGER,
                 update_time INTEGER
             )
-            """
-        )
+            """)
         self._get_conn().commit()
 
     def _get_conn(self):
