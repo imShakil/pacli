@@ -209,7 +209,7 @@ label {
 
 .badge-password {
     background: rgba(91, 141, 238, .15);
-    color: #1b2430;
+    color: var(--accent);
 }
 
 .badge-token {
