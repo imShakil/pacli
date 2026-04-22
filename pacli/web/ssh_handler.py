@@ -187,5 +187,5 @@ class SSHConnectionManager:
 
     def close_all(self):
         """Close all SSH connections."""
-        for connection_id in list(self.connections.keys()):
+        for connection_id in self.connections.keys():
             self.close_connection(connection_id)

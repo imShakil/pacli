@@ -10,18 +10,26 @@ logger = get_logger("pacli.commands.admin")
 
 @click.command()
 def init():
-    """Initialize pacli and set a master password."""
+    """
+    (Optional) Explicitly set the master password.
+
+    pacli sets up your master password automatically the first time you run
+    any command — you don't need to run this manually. Use it only if you
+    want to reset or pre-configure pacli before your first secret.
+    """
     config_dir = os.path.expanduser("~/.config/pacli")
     os.makedirs(config_dir, exist_ok=True)
     try:
         os.chmod(config_dir, 0o700)
     except Exception as e:
         logger.warning(f"Could not set permissions on {config_dir}: {e}")
+
     store = SecretStore()
     if store.is_master_set():
         click.echo(
-            "Master password is already set. If you want to reset, "
-            + "delete ~/.config/pacli/salt.bin and run this command again."
+            "✅ Master password is already set.\n"
+            "   To reset, delete ~/.config/pacli/salt.bin and run this command again.\n"
+            "   To change it without losing secrets, use: pacli change-master-key"
         )
         return
     store.set_master_password()
@@ -50,7 +58,12 @@ def change_master_key():
         return
 
     store.update_master_password(new_password)
-    store.require_fernet()
+    # Re-derive fernet with new password so re-encryption works
+    from ..store import get_salt
+
+    salt = get_salt()
+    store.fernet = store._derive_fernet(new_password, salt)
+
     for sid, plain in all_secrets:
         encrypted = store.fernet.encrypt(plain.encode()).decode()
         store.conn.execute("UPDATE secrets SET value_encrypted = ? WHERE id = ?", (encrypted, sid))
