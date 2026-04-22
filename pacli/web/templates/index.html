@@ -61,6 +61,10 @@
       <div class="topbar-brand"><span>🔐</span> pacli</div>
       <div class="topbar-actions">
         <span class="topbar-count" id="total-count"></span>
+        <button id="theme-toggle-btn" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="Toggle theme">
+          <span id="theme-icon" class="theme-icon" aria-hidden="true">🌙</span>
+          <span id="theme-label">Dark</span>
+        </button>
         <button class="btn btn-ghost btn-sm" onclick="openEnvModal()" title="Import .env file">📥 .env</button>
         <button class="btn btn-ghost btn-sm" onclick="openBackupModal()">☁️ Backup</button>
         <button class="btn btn-ghost btn-sm" onclick="openSSHModal()">⌨️ SSH</button>

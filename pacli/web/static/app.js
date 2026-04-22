@@ -15,12 +15,14 @@ const S = {
   revealTimer: null,
   sshOutputPoller: null,
   envFile: null,
+  theme: 'dark',
 };
 
 // ------------------------------------------------------------------
 // Boot
 // ------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
+  initTheme();
   S.socket = io();
   bindSocketEvents();
   const res = await api('GET', '/api/auth/check');
@@ -32,6 +34,64 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Keyboard shortcuts
   document.addEventListener('keydown', handleGlobalKeydown);
 });
+
+// ------------------------------------------------------------------
+// Theme
+// ------------------------------------------------------------------
+function initTheme() {
+  let theme = localStorage.getItem('pacli.theme');
+  if (!theme) {
+    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+      ? 'light'
+      : 'dark';
+  }
+  applyTheme(theme);
+}
+
+function applyTheme(theme) {
+  const normalized = theme === 'light' ? 'light' : 'dark';
+  const prevTheme = S.theme;
+  S.theme = normalized;
+  document.documentElement.setAttribute('data-theme', normalized);
+  localStorage.setItem('pacli.theme', normalized);
+  updateThemeToggleButton(prevTheme !== normalized);
+}
+
+function toggleTheme() {
+  applyTheme(S.theme === 'dark' ? 'light' : 'dark');
+}
+
+function updateThemeToggleButton(animateIcon = false) {
+  const btn = document.getElementById('theme-toggle-btn');
+  const icon = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+  if (!btn) return;
+
+  const setThemeText = () => {
+    if (S.theme === 'dark') {
+      if (icon) icon.textContent = '🌙';
+      if (label) label.textContent = 'Dark';
+      btn.setAttribute('aria-label', 'Switch to light theme');
+      btn.title = 'Switch to light theme';
+    } else {
+      if (icon) icon.textContent = '☀️';
+      if (label) label.textContent = 'Light';
+      btn.setAttribute('aria-label', 'Switch to dark theme');
+      btn.title = 'Switch to dark theme';
+    }
+  };
+
+  if (animateIcon && icon) {
+    icon.classList.add('icon-swapping');
+    setTimeout(() => {
+      setThemeText();
+      icon.classList.remove('icon-swapping');
+    }, 120);
+    return;
+  }
+
+  setThemeText();
+}
 
 function handleGlobalKeydown(e) {
   // Esc closes any open modal

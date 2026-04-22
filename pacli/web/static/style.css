@@ -1,3 +1,10 @@
+/* ============================================================
+   pacli — Modern Slate + Emerald Theme
+   Effects: gradient buttons · focus glow · noise texture
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -5,24 +12,73 @@
 }
 
 :root {
-    --bg: #0d0f14;
-    --surface: #13161e;
-    --surface2: #1a1e28;
-    --border: #252a38;
-    --border2: #2e3447;
-    --accent: #5b8dee;
-    --green: #3ecf8e;
-    --red: #f56565;
-    --yellow: #f6ad55;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --muted2: #8892a4;
+    /* ── Core palette ── */
+    --bg: #0b0f0e;
+    /* deep near-black with a green tinge */
+    --surface: #111917;
+    /* card / sidebar surface */
+    --surface2: #18211e;
+    /* elevated surface */
+    --border: rgba(52, 211, 153, 0.08);
+    --border2: rgba(52, 211, 153, 0.14);
+
+    /* ── Accent — emerald ── */
+    --accent: #34d399;
+    --accent-dim: #10b981;
+    --accent-glow: rgba(52, 211, 153, 0.22);
+    --accent-subtle: rgba(52, 211, 153, 0.08);
+
+    /* ── Semantic colours ── */
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+
+    /* ── Text ── */
+    --text: #e2f0eb;
+    --muted: #5a7a6e;
+    --muted2: #8aab9c;
+
+    /* ── Misc ── */
     --radius: 10px;
-    --shadow: 0 4px 24px rgba(0, 0, 0, .5);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
     --font-ui: 'Syne', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --terminal-bg: #060a09;
+    --terminal-toolbar-bg: #0a0f0e;
+
+    /* ── Noise texture (SVG data URI) ── */
+    --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
 }
 
+:root[data-theme='light'] {
+    --bg: #f4f8f6;
+    --surface: #ffffff;
+    --surface2: #edf5f1;
+    --border: rgba(6, 95, 70, 0.12);
+    --border2: rgba(6, 95, 70, 0.2);
+
+    --accent: #047857;
+    --accent-dim: #065f46;
+    --accent-glow: rgba(4, 120, 87, 0.22);
+    --accent-subtle: rgba(4, 120, 87, 0.08);
+
+    --green: #047857;
+    --red: #dc2626;
+    --yellow: #b45309;
+
+    --text: #0f172a;
+    --muted: #5f6f67;
+    --muted2: #34423b;
+
+    --shadow: 0 12px 34px rgba(0, 0, 0, 0.12);
+    --terminal-bg: #f7faf8;
+    --terminal-toolbar-bg: #eef4f1;
+    --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
 html,
 body {
     height: 100%;
@@ -30,16 +86,21 @@ body {
 
 body {
     font-family: var(--font-ui);
-    background: var(--bg);
+    background-color: var(--bg);
+    background-image: var(--noise);
     color: var(--text);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    transition: background-color .2s ease, color .2s ease;
 }
 
 .hidden {
     display: none !important;
 }
 
+/* ============================================================
+   Form elements
+   ============================================================ */
 input,
 textarea,
 select {
@@ -51,7 +112,7 @@ select {
     padding: .65rem 1rem;
     width: 100%;
     font-size: .925rem;
-    transition: border-color .2s;
+    transition: border-color .2s, box-shadow .2s;
     outline: none;
 }
 
@@ -59,7 +120,9 @@ input:focus,
 textarea:focus,
 select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(91, 141, 238, .15);
+    box-shadow:
+        0 0 0 3px var(--accent-glow),
+        0 0 12px var(--accent-glow);
 }
 
 select option {
@@ -72,7 +135,6 @@ textarea {
     font-size: .85rem;
 }
 
-/* Token hidden mode */
 textarea.token-hidden {
     -webkit-text-security: disc;
     font-family: var(--font-ui);
@@ -109,7 +171,9 @@ label {
     letter-spacing: 0;
 }
 
-/* ---- Buttons ---- */
+/* ============================================================
+   Buttons
+   ============================================================ */
 .btn {
     font-family: var(--font-ui);
     font-size: .9rem;
@@ -118,28 +182,40 @@ label {
     border: none;
     border-radius: var(--radius);
     cursor: pointer;
-    transition: all .15s;
+    transition: all .18s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: .45rem;
     letter-spacing: .02em;
     white-space: nowrap;
+    position: relative;
+    overflow: hidden;
 }
 
 .btn:active {
     transform: scale(.97);
 }
 
+/* Primary — gradient emerald */
 .btn-primary {
-    background: var(--accent);
-    color: #fff;
+    background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+    color: #021a10;
+    font-weight: 800;
+    box-shadow: 0 2px 14px rgba(52, 211, 153, 0.28);
 }
 
 .btn-primary:hover {
-    background: #4a7de0;
+    background: linear-gradient(135deg, #6ee7b7 0%, #34d399 100%);
+    box-shadow: 0 4px 22px rgba(52, 211, 153, 0.42);
+    transform: translateY(-1px);
 }
 
+.btn-primary:active {
+    transform: scale(.97) translateY(0);
+}
+
+/* Ghost */
 .btn-ghost {
     background: var(--surface2);
     color: var(--muted2);
@@ -147,18 +223,20 @@ label {
 }
 
 .btn-ghost:hover {
-    background: var(--border2);
+    background: rgba(52, 211, 153, 0.08);
+    border-color: rgba(52, 211, 153, 0.25);
     color: var(--text);
 }
 
+/* Danger */
 .btn-danger {
-    background: rgba(245, 101, 101, .15);
+    background: rgba(248, 113, 113, .12);
     color: var(--red);
-    border: 1px solid rgba(245, 101, 101, .3);
+    border: 1px solid rgba(248, 113, 113, .28);
 }
 
 .btn-danger:hover {
-    background: rgba(245, 101, 101, .25);
+    background: rgba(248, 113, 113, .22);
 }
 
 .btn-sm {
@@ -166,11 +244,28 @@ label {
     font-size: .8rem;
 }
 
+#theme-toggle-btn {
+    min-width: 6.6rem;
+}
+
+.theme-icon {
+    display: inline-block;
+    transition: transform .28s cubic-bezier(.22, 1, .36, 1), opacity .22s ease;
+    will-change: transform, opacity;
+}
+
+.theme-icon.icon-swapping {
+    transform: rotate(120deg) scale(.75);
+    opacity: .2;
+}
+
 .btn-block {
     width: 100%;
 }
 
-/* ---- Alerts ---- */
+/* ============================================================
+   Alerts
+   ============================================================ */
 .alert {
     font-size: .875rem;
     padding: .7rem 1rem;
@@ -180,24 +275,26 @@ label {
 }
 
 .alert-error {
-    background: rgba(245, 101, 101, .1);
-    border-color: rgba(245, 101, 101, .3);
-    color: #1b2430;
+    background: rgba(248, 113, 113, .1);
+    border-color: rgba(248, 113, 113, .3);
+    color: #fca5a5;
 }
 
 .alert-success {
-    background: rgba(62, 207, 142, .1);
-    border-color: rgba(62, 207, 142, .3);
+    background: rgba(52, 211, 153, .1);
+    border-color: rgba(52, 211, 153, .3);
     color: var(--green);
 }
 
 .alert-info {
-    background: rgba(91, 141, 238, .1);
-    border-color: rgba(91, 141, 238, .3);
-    color: #1b2430;
+    background: rgba(52, 211, 153, .07);
+    border-color: rgba(52, 211, 153, .2);
+    color: var(--muted2);
 }
 
-/* ---- Badges ---- */
+/* ============================================================
+   Badges
+   ============================================================ */
 .badge {
     font-size: .68rem;
     font-weight: 700;
@@ -208,21 +305,23 @@ label {
 }
 
 .badge-password {
-    background: rgba(91, 141, 238, .15);
+    background: rgba(52, 211, 153, .12);
     color: var(--accent);
 }
 
 .badge-token {
-    background: rgba(246, 173, 85, .12);
+    background: rgba(251, 191, 36, .12);
     color: var(--yellow);
 }
 
 .badge-ssh {
-    background: rgba(62, 207, 142, .12);
-    color: var(--green);
+    background: rgba(52, 211, 153, .08);
+    color: var(--accent-dim);
 }
 
-/* ---- kbd ---- */
+/* ============================================================
+   KBD
+   ============================================================ */
 .kbd {
     font-family: var(--font-mono);
     font-size: .65rem;
@@ -233,7 +332,9 @@ label {
     color: var(--muted);
 }
 
-/* ---- Overlay / Auth ---- */
+/* ============================================================
+   Overlay / Auth
+   ============================================================ */
 .overlay {
     position: fixed;
     inset: 0;
@@ -241,17 +342,31 @@ label {
     align-items: center;
     justify-content: center;
     background: var(--bg);
+    background-image: var(--noise);
     z-index: 100;
+}
+
+/* Radial glow behind the auth card */
+.overlay::before {
+    content: '';
+    position: absolute;
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(52, 211, 153, 0.08) 0%, transparent 70%);
+    pointer-events: none;
 }
 
 .auth-card {
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    border: 1px solid var(--border2);
+    border-radius: 18px;
     padding: 2.5rem;
     width: 100%;
     max-width: 420px;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), 0 0 40px rgba(52, 211, 153, 0.06);
+    position: relative;
+    z-index: 1;
 }
 
 .auth-logo {
@@ -267,6 +382,7 @@ label {
     font-size: 1.7rem;
     font-weight: 800;
     margin-top: .4rem;
+    letter-spacing: -.02em;
 }
 
 .auth-logo p {
@@ -282,7 +398,9 @@ label {
     margin-top: 1.25rem;
 }
 
-/* ---- App shell ---- */
+/* ============================================================
+   App shell
+   ============================================================ */
 #app {
     display: flex;
     flex-direction: column;
@@ -299,6 +417,7 @@ label {
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     gap: 1rem;
+    background-image: var(--noise);
 }
 
 .topbar-brand {
@@ -307,6 +426,7 @@ label {
     gap: .6rem;
     font-weight: 800;
     font-size: 1.05rem;
+    letter-spacing: -.01em;
 }
 
 .topbar-brand span {
@@ -332,11 +452,14 @@ label {
     overflow: hidden;
 }
 
-/* ---- Sidebar ---- */
+/* ============================================================
+   Sidebar
+   ============================================================ */
 .sidebar {
     width: 210px;
     flex-shrink: 0;
     background: var(--surface);
+    background-image: var(--noise);
     border-right: 1px solid var(--border);
     padding: 1.2rem .9rem;
     display: flex;
@@ -382,14 +505,14 @@ label {
 }
 
 .filter-item:hover {
-    background: var(--surface2);
+    background: var(--accent-subtle);
     color: var(--text);
 }
 
 .filter-item.active {
-    background: rgba(91, 141, 238, .12);
+    background: rgba(52, 211, 153, .1);
     color: var(--accent);
-    border-color: rgba(91, 141, 238, .2);
+    border-color: rgba(52, 211, 153, .2);
 }
 
 .filter-count {
@@ -434,7 +557,9 @@ label {
     gap: .4rem;
 }
 
-/* ---- Main / Grid ---- */
+/* ============================================================
+   Main / Grid
+   ============================================================ */
 .main {
     flex: 1;
     overflow-y: auto;
@@ -447,17 +572,22 @@ label {
     gap: 1rem;
 }
 
+/* ============================================================
+   Secret cards
+   ============================================================ */
 .secret-card {
     background: var(--surface);
+    background-image: var(--noise);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1.1rem 1.15rem 1rem;
     cursor: pointer;
-    transition: all .18s;
+    transition: all .2s;
     position: relative;
     overflow: hidden;
 }
 
+/* left accent stripe */
 .secret-card::before {
     content: '';
     position: absolute;
@@ -466,14 +596,14 @@ label {
     bottom: 0;
     width: 3px;
     background: transparent;
-    transition: background .18s;
+    transition: background .2s;
 }
 
 .secret-card:hover {
-    border-color: var(--border2);
+    border-color: rgba(52, 211, 153, .22);
     background: var(--surface2);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .35), 0 0 16px rgba(52, 211, 153, .06);
 }
 
 .secret-card:hover::before {
@@ -526,10 +656,12 @@ label {
 }
 
 .card-action-btn:hover {
-    background: var(--border2);
-    color: var(--text);
+    background: rgba(52, 211, 153, .1);
+    border-color: rgba(52, 211, 153, .25);
+    color: var(--accent);
 }
 
+/* ── Empty state ── */
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
@@ -548,12 +680,14 @@ label {
     color: var(--muted2);
 }
 
-/* ---- Modals ---- */
+/* ============================================================
+   Modals
+   ============================================================ */
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, .65);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, .7);
+    backdrop-filter: blur(6px);
     z-index: 200;
     display: flex;
     align-items: center;
@@ -563,19 +697,20 @@ label {
 
 .modal {
     background: var(--surface);
+    background-image: var(--noise);
     border: 1px solid var(--border2);
-    border-radius: 14px;
+    border-radius: 16px;
     width: 100%;
     max-width: 480px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: var(--shadow);
-    animation: slideUp .2s ease;
+    box-shadow: var(--shadow), 0 0 40px rgba(52, 211, 153, 0.05);
+    animation: slideUp .22s cubic-bezier(.22, 1, .36, 1);
 }
 
 @keyframes slideUp {
     from {
-        transform: translateY(16px);
+        transform: translateY(18px);
         opacity: 0;
     }
 
@@ -622,8 +757,8 @@ label {
 }
 
 .modal-close:hover {
-    background: var(--surface2);
-    color: var(--text);
+    background: rgba(248, 113, 113, .12);
+    color: var(--red);
 }
 
 .modal-body {
@@ -642,7 +777,9 @@ label {
     background: var(--surface);
 }
 
-/* ---- Type selector (Add modal) ---- */
+/* ============================================================
+   Type selector (Add modal)
+   ============================================================ */
 .type-selector {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -660,19 +797,20 @@ label {
     border: 2px solid var(--border2);
     border-radius: var(--radius);
     cursor: pointer;
-    transition: all .15s;
+    transition: all .18s;
     font-family: var(--font-ui);
     text-align: center;
 }
 
 .type-btn:hover {
-    border-color: var(--accent);
-    background: rgba(91, 141, 238, .06);
+    border-color: rgba(52, 211, 153, .35);
+    background: var(--accent-subtle);
 }
 
 .type-btn.active {
     border-color: var(--accent);
-    background: rgba(91, 141, 238, .12);
+    background: rgba(52, 211, 153, .1);
+    box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .type-icon {
@@ -690,7 +828,9 @@ label {
     color: var(--muted);
 }
 
-/* ---- Password input with toggle ---- */
+/* ============================================================
+   Password input with toggle
+   ============================================================ */
 .pw-input-wrap {
     position: relative;
     display: flex;
@@ -721,12 +861,14 @@ label {
 }
 
 .pw-toggle:hover {
-    color: var(--text);
+    color: var(--accent);
 }
 
-/* ---- Password strength ---- */
+/* ============================================================
+   Password strength
+   ============================================================ */
 .strength-wrap {
-    height: 4px;
+    height: 3px;
     background: var(--border2);
     border-radius: 2px;
     overflow: hidden;
@@ -748,7 +890,9 @@ label {
     margin-top: .2rem;
 }
 
-/* ---- SSH add form grid ---- */
+/* ============================================================
+   SSH form
+   ============================================================ */
 .ssh-form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -776,7 +920,9 @@ label {
     flex-shrink: 0;
 }
 
-/* ---- View modal ---- */
+/* ============================================================
+   View modal rows
+   ============================================================ */
 .view-row {
     display: flex;
     gap: .75rem;
@@ -804,6 +950,9 @@ label {
     word-break: break-all;
 }
 
+/* ============================================================
+   Reveal area
+   ============================================================ */
 .reveal-area {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -845,7 +994,9 @@ label {
     margin-bottom: .75rem;
 }
 
-/* ---- Tabs ---- */
+/* ============================================================
+   Tabs
+   ============================================================ */
 .tabs {
     display: flex;
     border-bottom: 1px solid var(--border);
@@ -883,7 +1034,9 @@ label {
     display: block;
 }
 
-/* ---- SSH Terminal ---- */
+/* ============================================================
+   SSH Terminal
+   ============================================================ */
 .ssh-status {
     font-family: var(--font-mono);
     font-size: .75rem;
@@ -895,38 +1048,39 @@ label {
 }
 
 .ssh-status-connecting {
-    background: rgba(246, 173, 85, .15);
+    background: rgba(251, 191, 36, .12);
     color: var(--yellow);
-    border: 1px solid rgba(246, 173, 85, .3);
+    border: 1px solid rgba(251, 191, 36, .28);
 }
 
 .ssh-status-connected {
-    background: rgba(62, 207, 142, .15);
+    background: rgba(52, 211, 153, .12);
     color: var(--green);
-    border: 1px solid rgba(62, 207, 142, .3);
+    border: 1px solid rgba(52, 211, 153, .28);
 }
 
 .ssh-status-disconnected {
-    background: rgba(100, 116, 139, .15);
+    background: rgba(90, 122, 110, .12);
     color: var(--muted);
-    border: 1px solid rgba(100, 116, 139, .3);
+    border: 1px solid rgba(90, 122, 110, .28);
 }
 
 .ssh-status-error {
-    background: rgba(245, 101, 101, .15);
+    background: rgba(248, 113, 113, .12);
     color: var(--red);
-    border: 1px solid rgba(245, 101, 101, .3);
+    border: 1px solid rgba(248, 113, 113, .28);
 }
 
 .ssh-terminal {
-    background: #090b0f;
-    border-radius: 8px;
+    background: var(--terminal-bg);
+    border-radius: 10px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     height: 380px;
     border: 1px solid var(--border);
     font-family: var(--font-mono);
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.05);
 }
 
 .ssh-terminal-toolbar {
@@ -934,7 +1088,7 @@ label {
     align-items: center;
     gap: .5rem;
     padding: .5rem .8rem;
-    background: #0c0e13;
+    background: var(--terminal-toolbar-bg);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
@@ -947,15 +1101,15 @@ label {
 }
 
 .terminal-dot.red {
-    background: #f56565;
+    background: #f87171;
 }
 
 .terminal-dot.yellow {
-    background: #f6ad55;
+    background: #fbbf24;
 }
 
 .terminal-dot.green {
-    background: #3ecf8e;
+    background: #34d399;
 }
 
 .terminal-title {
@@ -979,7 +1133,7 @@ label {
 
 .terminal-clear-btn:hover {
     background: var(--border2);
-    color: var(--text);
+    color: var(--accent);
 }
 
 .ssh-output {
@@ -988,7 +1142,7 @@ label {
     overflow-y: auto;
     font-size: .82rem;
     line-height: 1.55;
-    color: #a8c0d8;
+    color: color-mix(in srgb, var(--text) 78%, var(--accent) 22%);
     white-space: pre-wrap;
     word-wrap: break-word;
 }
@@ -996,13 +1150,13 @@ label {
 .ssh-input-row {
     display: flex;
     border-top: 1px solid var(--border);
-    background: #0c0e13;
+    background: var(--terminal-toolbar-bg);
     align-items: center;
 }
 
 .ssh-prompt {
     padding: .6rem .7rem;
-    color: var(--green);
+    color: var(--accent);
     font-size: .82rem;
     flex-shrink: 0;
 }
@@ -1035,7 +1189,9 @@ label {
     gap: .75rem;
 }
 
-/* ---- .env Import ---- */
+/* ============================================================
+   .env Import
+   ============================================================ */
 .env-preview {
     margin-top: 1rem;
     max-height: 300px;
@@ -1122,7 +1278,9 @@ label {
     padding: 1rem;
 }
 
-/* ---- Backup ---- */
+/* ============================================================
+   Backup
+   ============================================================ */
 .backup-box {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -1157,7 +1315,8 @@ label {
 .upload-zone:hover,
 .upload-zone.drag-over {
     border-color: var(--accent);
-    background: rgba(91, 141, 238, .05);
+    background: rgba(52, 211, 153, .05);
+    box-shadow: 0 0 16px rgba(52, 211, 153, .08);
 }
 
 .upload-zone p {
@@ -1166,7 +1325,9 @@ label {
     margin: 0;
 }
 
-/* ---- Help text & inline code ---- */
+/* ============================================================
+   Help text & inline code
+   ============================================================ */
 .help-text {
     font-size: .82rem;
     color: var(--muted);
@@ -1180,9 +1341,12 @@ label {
     border-radius: 4px;
     padding: .1rem .4rem;
     font-size: .8em;
+    color: var(--accent);
 }
 
-/* ---- Toast ---- */
+/* ============================================================
+   Toast
+   ============================================================ */
 .toast {
     position: fixed;
     bottom: 1.5rem;
@@ -1194,7 +1358,7 @@ label {
     padding: .6rem 1.4rem;
     font-size: .875rem;
     font-weight: 600;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), 0 0 20px rgba(52, 211, 153, 0.08);
     z-index: 9999;
     transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
     pointer-events: none;
@@ -1206,11 +1370,13 @@ label {
 }
 
 .toast-error {
-    border-color: rgba(245, 101, 101, .4);
-    color: #fc8181;
+    border-color: rgba(248, 113, 113, .4);
+    color: #fca5a5;
 }
 
-/* ---- Scrollbars ---- */
+/* ============================================================
+   Scrollbars
+   ============================================================ */
 ::-webkit-scrollbar {
     width: 5px;
     height: 5px;
@@ -1221,11 +1387,17 @@ label {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--border2);
+    background: rgba(52, 211, 153, 0.18);
     border-radius: 3px;
 }
 
-/* ---- Responsive ---- */
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(52, 211, 153, 0.32);
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
 @media (max-width: 640px) {
     .sidebar {
         display: none;
@@ -1237,6 +1409,10 @@ label {
 
     .topbar-actions .btn-ghost {
         display: none;
+    }
+
+    #theme-toggle-btn {
+        display: inline-flex !important;
     }
 
     .type-selector {
