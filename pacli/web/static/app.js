@@ -1,855 +1,543 @@
-// App State
-const app = {
-    authenticated: false,
-    secrets: [],
-    filteredSecrets: [],
-    currentFilter: 'all',
-    currentSecret: null,
-    isEditing: false,
-    sshConnection: null,
-    socket: null,
-    secretVisibilityTimeout: null,
+/* ========================================================================
+   pacli Web UI — app.js
+   ======================================================================== */
+
+const S = {          // app state
+  secrets: [],
+  filter: 'all',
+  query: '',
+  currentId: null,   // ID open in view modal
+  currentSecret: null, // full secret object (revealed)
+  editingId: null,   // null = new, string = update
+  sshConnectionId: null,
+  socket: null,
+  backupFile: null,
+  revealTimer: null,
 };
 
-// DOM Elements
-const loginScreen = document.getElementById('login-screen');
-const mainScreen = document.getElementById('main-screen');
-const loginForm = document.getElementById('login-form');
-const passwordInput = document.getElementById('password');
-const loginError = document.getElementById('login-error');
-const logoutBtn = document.getElementById('logout-btn');
-const addSecretBtn = document.getElementById('add-secret-btn');
-const secretsList = document.getElementById('secrets-list');
-const secretModal = document.getElementById('secret-modal');
-const viewModal = document.getElementById('view-modal');
-const sshModal = document.getElementById('ssh-modal');
-const secretForm = document.getElementById('secret-form');
-const secretLabel = document.getElementById('secret-label');
-const secretType = document.getElementById('secret-type');
-const secretValue = document.getElementById('secret-value');
-const modalTitle = document.getElementById('modal-title');
-const modalError = document.getElementById('modal-error');
-const searchInput = document.getElementById('search-input');
-const filterButtons = document.querySelectorAll('.filter-btn');
-
-// SSH Elements
-const sshTerminalBtn = document.getElementById('ssh-terminal-btn');
-const sshAuthType = document.getElementById('ssh-auth-type');
-const sshPasswordGroup = document.getElementById('ssh-password-group');
-const sshKeyGroup = document.getElementById('ssh-key-group');
-const sshConnectBtn = document.getElementById('ssh-connect-btn');
-const sshDisconnectBtn = document.getElementById('ssh-disconnect-btn');
-const sshCommandInput = document.getElementById('ssh-command-input');
-const sshOutput = document.getElementById('ssh-output');
-const sshConnectionForm = document.getElementById('ssh-connection-form');
-const sshTerminal = document.getElementById('ssh-terminal');
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    checkAuth();
-    setupEventListeners();
-    initializeSocket();
+// ------------------------------------------------------------------
+// Boot
+// ------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', async () => {
+  S.socket = io();
+  bindSocketEvents();
+  const res = await api('GET', '/api/auth/check');
+  if (!res) return showLogin();
+  if (!res.configured) return showSetup();
+  if (res.authenticated) { showApp(); await loadSecrets(); }
+  else showLogin();
 });
 
-function setupEventListeners() {
-    loginForm.addEventListener('submit', handleLogin);
-    logoutBtn.addEventListener('click', handleLogout);
-    addSecretBtn.addEventListener('click', openAddSecretModal);
-    secretForm.addEventListener('submit', handleSaveSecret);
-    searchInput.addEventListener('input', handleSearch);
-    filterButtons.forEach(btn => {
-        btn.addEventListener('click', handleFilter);
-    });
-
-    // SSH Terminal listeners
-    sshTerminalBtn.addEventListener('click', openSSHModal);
-    sshAuthType.addEventListener('change', handleAuthTypeChange);
-    sshConnectBtn.addEventListener('click', handleSSHConnect);
-    sshDisconnectBtn.addEventListener('click', handleSSHDisconnect);
-    sshCommandInput.addEventListener('keypress', handleSSHCommandKeypress);
-
-    // SSH Tab switching
-    document.querySelectorAll('.ssh-tab-btn').forEach(btn => {
-        btn.addEventListener('click', handleSSHTabSwitch);
-    });
-
-    // Stored SSH server connection
-    const storedConnectBtn = document.getElementById('ssh-stored-connect-btn');
-    if (storedConnectBtn) {
-        storedConnectBtn.addEventListener('click', handleStoredSSHConnect);
-    }
-
-    // Modal close buttons
-    document.querySelectorAll('.modal-close').forEach(btn => {
-        btn.addEventListener('click', closeModals);
-    });
-    document.querySelectorAll('.modal-close-btn').forEach(btn => {
-        btn.addEventListener('click', closeModals);
-    });
-
-    // View modal buttons
-    document.getElementById('edit-secret-btn').addEventListener('click', editSecret);
-    document.getElementById('delete-secret-btn').addEventListener('click', deleteSecret);
-    document.getElementById('toggle-secret-btn').addEventListener('click', toggleSecretVisibility);
-    document.getElementById('copy-secret-btn').addEventListener('click', copySecretToClipboard);
-
-    // Close modals when clicking outside
-    secretModal.addEventListener('click', (e) => {
-        if (e.target === secretModal) closeModals();
-    });
-    viewModal.addEventListener('click', (e) => {
-        if (e.target === viewModal) closeModals();
-    });
-    sshModal.addEventListener('click', (e) => {
-        if (e.target === sshModal) closeModals();
-    });
+// ------------------------------------------------------------------
+// Setup (first run)
+// ------------------------------------------------------------------
+function showSetup() {
+  hide('login-overlay'); hide('app');
+  show('setup-overlay');
+  document.getElementById('setup-pw').focus();
 }
 
-function initializeSocket() {
-    app.socket = io();
-
-    app.socket.on('connect', () => {
-        console.log('Connected to WebSocket server');
-    });
-
-    app.socket.on('ssh_connected', (data) => {
-        app.sshConnection = data.connection_id;
-        showSSHTerminal();
-        appendSSHOutput(`Connected to ${data.message}\n`);
-        sshCommandInput.disabled = false;
-        sshCommandInput.focus();
-    });
-
-    app.socket.on('ssh_output', (data) => {
-        if (data.output) {
-            appendSSHOutput(data.output);
-        }
-    });
-
-    app.socket.on('ssh_disconnected', (data) => {
-        appendSSHOutput(`\nDisconnected: ${data.message}\n`);
-        hideSSHTerminal();
-        app.sshConnection = null;
-    });
-
-    app.socket.on('error', (data) => {
-        console.error('WebSocket error:', data);
-        showSSHError(data.message || 'An error occurred');
-    });
+async function doSetup() {
+  const pw = val('setup-pw'), pw2 = val('setup-pw2');
+  if (pw.length < 6) return showMsg('setup-error', 'error', 'Password must be at least 6 characters.');
+  if (pw !== pw2) return showMsg('setup-error', 'error', 'Passwords do not match.');
+  hide('setup-error');
+  const res = await api('POST', '/api/setup/init', { password: pw, confirm: pw2 });
+  if (res?.success) { hide('setup-overlay'); showApp(); await loadSecrets(); }
+  else showMsg('setup-error', 'error', res?.error || 'Setup failed.');
 }
 
-async function checkAuth() {
-    try {
-        const response = await fetch('/api/auth/check', {
-            credentials: 'include'
-        });
-        const data = await response.json();
-
-        if (data.authenticated) {
-            app.authenticated = true;
-            showMainScreen();
-            loadSecrets();
-        } else {
-            showLoginScreen();
-        }
-    } catch (error) {
-        console.error('Auth check failed:', error);
-        showLoginScreen();
-    }
+// ------------------------------------------------------------------
+// Login / Logout
+// ------------------------------------------------------------------
+function showLogin() {
+  hide('setup-overlay'); hide('app');
+  show('login-overlay');
+  document.getElementById('login-pw').focus();
 }
 
-async function handleLogin(e) {
-    e.preventDefault();
-    const password = passwordInput.value;
-
-    if (!password) {
-        showError(loginError, 'Password is required');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ password }),
-        });
-
-        if (response.ok) {
-            app.authenticated = true;
-            passwordInput.value = '';
-            loginError.textContent = '';
-            showMainScreen();
-            loadSecrets();
-        } else {
-            const data = await response.json();
-            showError(loginError, data.error || 'Login failed');
-        }
-    } catch (error) {
-        console.error('Login error:', error);
-        showError(loginError, 'Login failed. Please try again.');
-    }
+async function doLogin() {
+  const pw = val('login-pw');
+  if (!pw) return showMsg('login-error', 'error', 'Password required.');
+  hide('login-error');
+  const res = await api('POST', '/api/auth/login', { password: pw });
+  if (res?.success) { hide('login-overlay'); showApp(); await loadSecrets(); }
+  else showMsg('login-error', 'error', res?.error || 'Invalid password.');
 }
 
-async function handleLogout() {
-    try {
-        await fetch('/api/auth/logout', {
-            method: 'POST',
-            credentials: 'include'
-        });
-        app.authenticated = false;
-        app.secrets = [];
-        showLoginScreen();
-        passwordInput.value = '';
-    } catch (error) {
-        console.error('Logout error:', error);
-    }
+async function doLogout() {
+  await api('POST', '/api/auth/logout');
+  hide('app'); showLogin();
+  document.getElementById('login-pw').value = '';
 }
 
-function showLoginScreen() {
-    loginScreen.classList.add('active');
-    mainScreen.classList.remove('active');
-}
+function showApp() { show('app'); }
 
-function showMainScreen() {
-    loginScreen.classList.remove('active');
-    mainScreen.classList.add('active');
-}
-
+// ------------------------------------------------------------------
+// Secrets
+// ------------------------------------------------------------------
 async function loadSecrets() {
-    try {
-        secretsList.innerHTML = '<div class="loading">Loading secrets...</div>';
-        const response = await fetch('/api/secrets', {
-            credentials: 'include'
-        });
-
-        if (response.status === 401) {
-            showLoginScreen();
-            return;
-        }
-
-        const data = await response.json();
-        app.secrets = data.secrets || [];
-        app.filteredSecrets = [...app.secrets];
-        renderSecrets();
-        populateSSHKeySelect();
-        populateStoredSSHServers();
-    } catch (error) {
-        console.error('Load secrets error:', error);
-        secretsList.innerHTML = '<div class="error-message show">Failed to load secrets</div>';
-    }
+  const res = await api('GET', '/api/secrets');
+  S.secrets = res?.secrets || [];
+  renderGrid();
+  populateSSHDropdowns();
 }
 
-function renderSecrets() {
-    if (app.filteredSecrets.length === 0) {
-        secretsList.innerHTML = `
-            <div class="empty-state">
-                <h3>No secrets found</h3>
-                <p>Click "Add Secret" to create your first secret</p>
-            </div>
-        `;
-        return;
-    }
+function renderGrid() {
+  const grid = document.getElementById('secrets-grid');
 
-    secretsList.innerHTML = app.filteredSecrets.map(secret => `
-        <div class="secret-card" onclick="viewSecret('${secret.id}')">
-            <div class="secret-card-header">
-                <div class="secret-card-label">${escapeHtml(secret.label)}</div>
-                <span class="secret-card-type ${secret.type}">${secret.type}</span>
-            </div>
-            <div class="secret-card-meta">
-                <div>Created: ${secret.creation_date}</div>
-                <div>Updated: ${secret.update_date}</div>
-            </div>
-        </div>
-    `).join('');
+  // Counts
+  const counts = { all: S.secrets.length, password: 0, token: 0, ssh: 0 };
+  S.secrets.forEach(s => { if (counts[s.type] !== undefined) counts[s.type]++; });
+  Object.entries(counts).forEach(([k, v]) => {
+    const el = document.getElementById('cnt-' + k);
+    if (el) el.textContent = v;
+  });
+  document.getElementById('total-count').textContent = `${counts.all} secret${counts.all !== 1 ? 's' : ''}`;
+
+  // Filter + search
+  const visible = S.secrets.filter(s => {
+    const matchFilter = S.filter === 'all' || s.type === S.filter;
+    const matchQuery = !S.query || s.label.toLowerCase().includes(S.query);
+    return matchFilter && matchQuery;
+  });
+
+  if (!visible.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div><h3>${S.query ? 'No results found' : 'No secrets yet'}</h3><p>${S.query ? 'Try a different search.' : 'Click "+ Add Secret" to get started.'}</p></div>`;
+    return;
+  }
+
+  grid.innerHTML = visible.map(s => `
+    <div class="secret-card" onclick="openViewModal('${s.id}')">
+      <div class="secret-card-top">
+        <div class="secret-card-label">${esc(s.label)}</div>
+        <span class="badge badge-${s.type}">${s.type}</span>
+      </div>
+      <div class="secret-card-meta">Updated ${s.update_date}</div>
+    </div>
+  `).join('');
 }
 
-function openAddSecretModal() {
-    app.isEditing = false;
-    app.currentSecret = null;
-    modalTitle.textContent = 'Add Secret';
-    secretLabel.value = '';
-    secretType.value = 'password';
-    secretValue.value = '';
-    modalError.textContent = '';
-    secretModal.classList.add('active');
-    secretLabel.focus();
+function setFilter(f, btn) {
+  S.filter = f;
+  document.querySelectorAll('.filter-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGrid();
 }
 
-async function handleSaveSecret(e) {
-    e.preventDefault();
-    const label = secretLabel.value.trim();
-    const type = secretType.value;
-    const secret = secretValue.value;
+function doSearch(q) { S.query = q.toLowerCase(); renderGrid(); }
 
-    if (!label || !secret) {
-        showError(modalError, 'Label and secret are required');
-        return;
-    }
-
-    try {
-        const method = app.isEditing ? 'PUT' : 'POST';
-        const url = app.isEditing ? `/api/secrets/${app.currentSecret.id}` : '/api/secrets';
-        const body = app.isEditing
-            ? { secret }
-            : { label, type, secret };
-
-        const response = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(body),
-        });
-
-        if (response.ok) {
-            closeModals();
-            loadSecrets();
-        } else {
-            const data = await response.json();
-            showError(modalError, data.error || 'Failed to save secret');
-        }
-    } catch (error) {
-        console.error('Save secret error:', error);
-        showError(modalError, 'Failed to save secret');
-    }
+// ------------------------------------------------------------------
+// Add / Edit modal
+// ------------------------------------------------------------------
+function openAddModal() {
+  S.editingId = null;
+  document.getElementById('edit-title').textContent = 'Add Secret';
+  document.getElementById('edit-label').value = '';
+  document.getElementById('edit-label').disabled = false;
+  document.getElementById('edit-type').value = 'password';
+  document.getElementById('edit-type').disabled = false;
+  document.getElementById('edit-value').value = '';
+  hide('edit-error');
+  show('edit-backdrop');
+  document.getElementById('edit-label').focus();
 }
 
-async function viewSecret(secretId) {
-    try {
-        const response = await fetch(`/api/secrets/${secretId}`, {
-            credentials: 'include'
-        });
-
-        if (response.ok) {
-            const secret = await response.json();
-            app.currentSecret = secret;
-
-            document.getElementById('view-label').textContent = escapeHtml(secret.label);
-            document.getElementById('view-type').textContent = secret.type;
-            // Store the placeholder, actual secret will be fetched on demand
-            document.getElementById('view-secret').textContent = secret.secret;
-            document.getElementById('view-secret').classList.add('hidden');
-            document.getElementById('toggle-secret-btn').textContent = 'Show';
-            document.getElementById('copy-secret-btn').style.display = 'none';
-            document.getElementById('view-created').textContent = new Date(secret.creation_time * 1000).toLocaleString();
-            document.getElementById('view-updated').textContent = new Date(secret.update_time * 1000).toLocaleString();
-
-            viewModal.classList.add('active');
-        }
-    } catch (error) {
-        console.error('View secret error:', error);
-    }
+function openEditFromView() {
+  const s = S.secrets.find(x => x.id === S.currentId);
+  if (!s) return;
+  closeViewModal();
+  S.editingId = s.id;
+  document.getElementById('edit-title').textContent = 'Edit Secret';
+  document.getElementById('edit-label').value = s.label;
+  document.getElementById('edit-label').disabled = true;
+  document.getElementById('edit-type').value = s.type;
+  document.getElementById('edit-type').disabled = true;
+  // Pre-fill with current revealed value if available, else blank
+  document.getElementById('edit-value').value = S.currentSecret?.secret || '';
+  hide('edit-error');
+  show('edit-backdrop');
+  document.getElementById('edit-value').focus();
 }
 
-function editSecret() {
-    if (!app.currentSecret) return;
+function closeEditModal() { hide('edit-backdrop'); }
 
-    app.isEditing = true;
-    closeModals();
+async function saveSecret() {
+  const label = document.getElementById('edit-label').value.trim();
+  const type  = document.getElementById('edit-type').value;
+  const secret = document.getElementById('edit-value').value.trim();
+  if (!label || !secret) return showMsg('edit-error', 'error', 'Label and secret value are required.');
+  hide('edit-error');
 
-    modalTitle.textContent = 'Edit Secret';
-    secretLabel.value = app.currentSecret.label;
-    secretLabel.disabled = true;
-    secretType.value = app.currentSecret.type;
-    secretType.disabled = true;
-    secretValue.value = app.currentSecret.secret;
-    modalError.textContent = '';
-    secretModal.classList.add('active');
-    secretValue.focus();
+  let res;
+  if (S.editingId) {
+    res = await api('PUT', `/api/secrets/${S.editingId}`, { secret });
+  } else {
+    res = await api('POST', '/api/secrets', { label, type, secret });
+  }
+
+  if (res?.success) { closeEditModal(); await loadSecrets(); }
+  else showMsg('edit-error', 'error', res?.error || 'Save failed.');
+}
+
+// ------------------------------------------------------------------
+// View modal
+// ------------------------------------------------------------------
+async function openViewModal(id) {
+  const s = S.secrets.find(x => x.id === id);
+  if (!s) return;
+  S.currentId = id;
+  S.currentSecret = null;
+
+  document.getElementById('view-title-text').textContent = s.label;
+  document.getElementById('view-label-val').textContent  = s.label;
+  document.getElementById('view-type-val').textContent   = s.type;
+  document.getElementById('view-created-val').textContent = new Date(s.creation_time * 1000).toLocaleString();
+  document.getElementById('view-updated-val').textContent = new Date(s.update_time * 1000).toLocaleString();
+
+  // Reset reveal state
+  setRevealMasked();
+  hide('view-msg');
+  show('view-backdrop');
+}
+
+function setRevealMasked() {
+  const el = document.getElementById('reveal-text');
+  el.textContent = '••••••••••••••••';
+  el.classList.add('masked');
+  document.getElementById('reveal-toggle-btn').textContent = '👁 Show';
+  clearTimeout(S.revealTimer);
+}
+
+function setRevealVisible(text) {
+  const el = document.getElementById('reveal-text');
+  el.textContent = text;
+  el.classList.remove('masked');
+  document.getElementById('reveal-toggle-btn').textContent = '🙈 Hide';
+  // Auto-hide after 30s
+  clearTimeout(S.revealTimer);
+  S.revealTimer = setTimeout(setRevealMasked, 30000);
+}
+
+async function fetchSecret() {
+  if (S.currentSecret) return S.currentSecret.secret;
+  const res = await api('GET', `/api/secrets/${S.currentId}/reveal`);
+  if (res?.secret !== undefined) {
+    S.currentSecret = res;
+    return res.secret;
+  }
+  return null;
+}
+
+async function toggleReveal() {
+  const el = document.getElementById('reveal-text');
+  if (!el.classList.contains('masked')) {
+    // Currently visible — hide
+    setRevealMasked();
+    return;
+  }
+  const text = await fetchSecret();
+  if (text === null) return showMsg('view-msg', 'error', 'Failed to reveal secret.');
+  setRevealVisible(text);
+}
+
+async function copySecret() {
+  // Copy works regardless of reveal state
+  const text = await fetchSecret();
+  if (text === null) return showMsg('view-msg', 'error', 'Failed to retrieve secret.');
+  try {
+    await navigator.clipboard.writeText(text);
+    showMsg('view-msg', 'success', '📋 Copied to clipboard!');
+    setTimeout(() => hide('view-msg'), 2500);
+  } catch {
+    showMsg('view-msg', 'error', 'Clipboard access denied. Please allow clipboard permissions.');
+  }
+}
+
+function closeViewModal() {
+  hide('view-backdrop');
+  setRevealMasked();
+  S.currentSecret = null;
 }
 
 async function deleteSecret() {
-    if (!app.currentSecret) return;
-
-    if (!confirm(`Are you sure you want to delete "${app.currentSecret.label}"?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/secrets/${app.currentSecret.id}`, {
-            method: 'DELETE',
-            credentials: 'include',
-        });
-
-        if (response.ok) {
-            closeModals();
-            loadSecrets();
-        } else {
-            const data = await response.json();
-            alert(data.error || 'Failed to delete secret');
-        }
-    } catch (error) {
-        console.error('Delete secret error:', error);
-        alert('Failed to delete secret');
-    }
+  if (!S.currentId) return;
+  const s = S.secrets.find(x => x.id === S.currentId);
+  if (!confirm(`Delete "${s?.label}"? This cannot be undone.`)) return;
+  const res = await api('DELETE', `/api/secrets/${S.currentId}`);
+  if (res?.success) { closeViewModal(); await loadSecrets(); }
+  else alert(res?.error || 'Delete failed.');
 }
 
-async function toggleSecretVisibility() {
-    const secretElement = document.getElementById('view-secret');
-    const btn = document.getElementById('toggle-secret-btn');
-    const copyBtn = document.getElementById('copy-secret-btn');
-
-    // If hidden, fetch and show the actual secret
-    if (secretElement.classList.contains('hidden')) {
-        try {
-            // Fetch the actual secret from the backend
-            const response = await fetch(`/api/secrets/${app.currentSecret.id}/reveal`, {
-                credentials: 'include'
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                // Replace placeholder with actual secret
-                secretElement.textContent = data.secret;
-                secretElement.classList.remove('hidden');
-                btn.textContent = 'Hide';
-                copyBtn.style.display = 'inline-block';
-
-                // Set auto-hide timeout (30 seconds)
-                clearTimeout(app.secretVisibilityTimeout);
-                app.secretVisibilityTimeout = setTimeout(() => {
-                    // Replace actual secret back with placeholder
-                    secretElement.textContent = '•••••••';
-                    secretElement.classList.add('hidden');
-                    btn.textContent = 'Show';
-                    copyBtn.style.display = 'none';
-                }, 30000);
-            } else {
-                console.error('Failed to reveal secret');
-                alert('Failed to reveal secret');
-            }
-        } catch (error) {
-            console.error('Reveal secret error:', error);
-            alert('Failed to reveal secret');
-        }
-    } else {
-        // If visible, hide immediately and replace with placeholder
-        secretElement.textContent = '•••••••';
-        secretElement.classList.add('hidden');
-        btn.textContent = 'Show';
-        copyBtn.style.display = 'none';
-        clearTimeout(app.secretVisibilityTimeout);
-    }
+// ------------------------------------------------------------------
+// SSH Terminal
+// ------------------------------------------------------------------
+function openSSHModal() { show('ssh-backdrop'); }
+function closeSSHModal() {
+  if (S.sshConnectionId) {
+    if (!confirm('You have an active SSH connection. Disconnect and close?')) return;
+    sshDisconnect();
+  }
+  hide('ssh-backdrop');
 }
 
-function copySecretToClipboard() {
-    const secretElement = document.getElementById('view-secret');
-    const text = secretElement.textContent;
-
-    navigator.clipboard.writeText(text).then(() => {
-        // Show feedback
-        const copyBtn = document.getElementById('copy-secret-btn');
-        const originalText = copyBtn.textContent;
-        copyBtn.textContent = '✓ Copied!';
-        setTimeout(() => {
-            copyBtn.textContent = originalText;
-        }, 2000);
-    }).catch(err => {
-        console.error('Copy failed:', err);
-        alert('Failed to copy secret');
-    });
+function toggleSSHAuth() {
+  const v = document.getElementById('ssh-auth').value;
+  document.getElementById('ssh-pw-field').style.display    = v === 'password' ? '' : 'none';
+  document.getElementById('ssh-key-fields').style.display  = v === 'key' ? '' : 'none';
 }
 
-function handleSearch(e) {
-    const query = e.target.value.toLowerCase();
+function populateSSHDropdowns() {
+  const sshSecrets = S.secrets.filter(s => s.type === 'ssh');
 
-    if (query === '') {
-        app.filteredSecrets = app.secrets.filter(s => {
-            if (app.currentFilter === 'all') return true;
-            return s.type === app.currentFilter;
-        });
-    } else {
-        app.filteredSecrets = app.secrets.filter(s => {
-            const matchesQuery = s.label.toLowerCase().includes(query);
-            const matchesFilter = app.currentFilter === 'all' || s.type === app.currentFilter;
-            return matchesQuery && matchesFilter;
-        });
-    }
+  // Key select (for manual connection)
+  const ks = document.getElementById('ssh-key-select');
+  ks.innerHTML = '<option value="">— Choose stored key —</option>';
+  sshSecrets.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.label;
+    ks.appendChild(o);
+  });
 
-    renderSecrets();
+  // Stored server select
+  const ss = document.getElementById('ssh-stored-select');
+  ss.innerHTML = '<option value="">— Choose —</option>';
+  sshSecrets.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.label;
+    ss.appendChild(o);
+  });
 }
 
-function handleFilter(e) {
-    filterButtons.forEach(btn => btn.classList.remove('active'));
-    e.target.classList.add('active');
+async function sshConnect(mode) {
+  const errId = mode === 'manual' ? 'ssh-manual-error' : 'ssh-stored-error';
+  hide(errId);
 
-    app.currentFilter = e.target.dataset.filter;
-    const query = searchInput.value.toLowerCase();
+  let payload = {};
 
-    if (query === '') {
-        app.filteredSecrets = app.secrets.filter(s => {
-            if (app.currentFilter === 'all') return true;
-            return s.type === app.currentFilter;
-        });
-    } else {
-        app.filteredSecrets = app.secrets.filter(s => {
-            const matchesQuery = s.label.toLowerCase().includes(query);
-            const matchesFilter = app.currentFilter === 'all' || s.type === app.currentFilter;
-            return matchesQuery && matchesFilter;
-        });
-    }
-
-    renderSecrets();
-}
-
-// SSH Terminal Functions
-function openSSHModal() {
-    sshModal.classList.add('active');
-    document.getElementById('ssh-hostname').focus();
-}
-
-function handleSSHTabSwitch(e) {
-    const tabName = e.target.dataset.tab;
-
-    // Don't allow tab switching if there's an active connection
-    if (app.sshConnection) {
-        alert('Please disconnect before switching tabs');
-        return;
-    }
-
-    // Update active tab button
-    document.querySelectorAll('.ssh-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    e.target.classList.add('active');
-
-    // Update active tab content
-    document.querySelectorAll('.ssh-tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.querySelector(`.ssh-tab-content[data-tab="${tabName}"]`).classList.add('active');
-}
-
-function handleAuthTypeChange(e) {
-    if (e.target.value === 'password') {
-        sshPasswordGroup.style.display = 'flex';
-        sshKeyGroup.style.display = 'none';
-    } else {
-        sshPasswordGroup.style.display = 'none';
-        sshKeyGroup.style.display = 'flex';
-    }
-}
-
-function populateSSHKeySelect() {
-    const sshKeySelect = document.getElementById('ssh-key-select');
-    if (!sshKeySelect) return; // Element doesn't exist, skip
-
-    const sshKeys = app.secrets.filter(s => s.type === 'ssh');
-
-    sshKeySelect.innerHTML = '<option value="">Select SSH key from secrets...</option>';
-    sshKeys.forEach(key => {
-        const option = document.createElement('option');
-        option.value = key.id;
-        option.textContent = key.label;
-        sshKeySelect.appendChild(option);
-    });
-}
-
-function populateStoredSSHServers() {
-    const storedSelect = document.getElementById('ssh-stored-select');
-    if (!storedSelect) return;
-
-    // Only show SSH secrets that have the stored server format (user:host|...)
-    // Plain SSH keys should be used in the manual connection tab
-    const sshServers = app.secrets.filter(s => s.type === 'ssh');
-
-    storedSelect.innerHTML = '<option value="">Select a stored SSH server...</option>';
-    sshServers.forEach(server => {
-        const option = document.createElement('option');
-        option.value = server.id;
-        option.textContent = server.label;
-        storedSelect.appendChild(option);
-    });
-}
-
-async function handleSSHConnect() {
-    const hostname = document.getElementById('ssh-hostname').value.trim();
-    const username = document.getElementById('ssh-username').value.trim();
+  if (mode === 'manual') {
+    const host = val('ssh-host'), user = val('ssh-user');
     const port = parseInt(document.getElementById('ssh-port').value) || 22;
-    const authType = sshAuthType.value;
-    const errorDiv = document.getElementById('ssh-form-error');
-
-    if (!hostname || !username) {
-        showError(errorDiv, 'Hostname and username are required');
-        return;
-    }
-
-    const connectionData = {
-        hostname,
-        username,
-        port,
-    };
-
-    if (authType === 'password') {
-        const password = document.getElementById('ssh-password').value;
-        if (!password) {
-            showError(errorDiv, 'Password is required');
-            return;
-        }
-        connectionData.password = password;
+    const auth = document.getElementById('ssh-auth').value;
+    if (!host || !user) return showMsg(errId, 'error', 'Hostname and username are required.');
+    payload = { hostname: host, username: user, port };
+    if (auth === 'password') {
+      const pw = val('ssh-password');
+      if (!pw) return showMsg(errId, 'error', 'Password is required.');
+      payload.password = pw;
     } else {
-        // Check if a key is selected from secrets first
-        const sshKeySelect = document.getElementById('ssh-key-select');
-        const selectedKeyId = sshKeySelect ? sshKeySelect.value : '';
-
-        if (selectedKeyId) {
-            // Use the selected key from secrets - fetch its content
-            try {
-                const response = await fetch(`/api/secrets/${selectedKeyId}/reveal`, {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    connectionData.ssh_key = data.secret;
-                } else {
-                    showError(errorDiv, 'Failed to retrieve SSH key from secrets');
-                    return;
-                }
-            } catch (error) {
-                console.error('Error fetching SSH key:', error);
-                showError(errorDiv, 'Failed to retrieve SSH key');
-                return;
-            }
-        } else {
-            // Fall back to pasted key
-            const keyInput = document.getElementById('ssh-key-input').value.trim();
-            if (!keyInput) {
-                showError(errorDiv, 'SSH private key is required');
-                return;
-            }
-            connectionData.ssh_key = keyInput;
-        }
+      const keyId = document.getElementById('ssh-key-select').value;
+      if (keyId) {
+        const r = await api('GET', `/api/secrets/${keyId}/reveal`);
+        if (!r?.secret) return showMsg(errId, 'error', 'Could not retrieve SSH key.');
+        payload.ssh_key = r.secret;
+      } else {
+        const pasted = val('ssh-key-paste');
+        if (!pasted) return showMsg(errId, 'error', 'Provide an SSH key.');
+        payload.ssh_key = pasted;
+      }
     }
+  } else {
+    const keyId = document.getElementById('ssh-stored-select').value;
+    if (!keyId) return showMsg(errId, 'error', 'Select a stored SSH server.');
+    payload = { key_id: keyId };
+  }
 
-    // Clear any previous errors
-    errorDiv.textContent = '';
-    errorDiv.classList.remove('show');
-
-    // Use WebSocket for real-time terminal
-    if (app.socket && app.socket.connected) {
-        app.socket.emit('ssh_connect', connectionData);
+  // Connect via WebSocket
+  if (S.socket?.connected) {
+    S.socket.emit('ssh_connect', payload);
+  } else {
+    // REST fallback
+    const r = await api('POST', '/api/ssh/connect', payload);
+    if (r?.success) {
+      S.sshConnectionId = r.connection_id;
+      showSSHTerminal();
+      appendSSH(`Connected: ${r.message}\n`);
     } else {
-        // Fallback to REST API
-        try {
-            const response = await fetch('/api/ssh/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(connectionData),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                app.sshConnection = data.connection_id;
-                showSSHTerminal();
-                appendSSHOutput(`Connected to ${hostname}\n`);
-                sshCommandInput.disabled = false;
-                sshCommandInput.focus();
-            } else {
-                const data = await response.json();
-                showError(errorDiv, data.error || 'Failed to connect');
-            }
-        } catch (error) {
-            console.error('SSH connect error:', error);
-            showError(errorDiv, 'Failed to connect to SSH server');
-        }
+      showMsg(errId, 'error', r?.error || 'Connection failed.');
     }
-}
-
-async function handleStoredSSHConnect() {
-    const serverId = document.getElementById('ssh-stored-select').value;
-    const errorDiv = document.getElementById('ssh-stored-form-error');
-
-    if (!serverId) {
-        showError(errorDiv, 'Please select an SSH server');
-        return;
-    }
-
-    // Find the selected server in secrets
-    const server = app.secrets.find(s => s.id === serverId);
-    if (!server) {
-        showError(errorDiv, 'Server not found');
-        return;
-    }
-
-    // Clear any previous errors
-    errorDiv.textContent = '';
-    errorDiv.classList.remove('show');
-
-    // For stored SSH servers, we need to parse the SSH key content
-    // The secret contains the SSH key, and we need to extract connection details
-    // For now, we'll use the key_id and let the backend handle it
-    const connectionData = {
-        key_id: serverId
-    };
-
-    // Use WebSocket for real-time terminal
-    if (app.socket && app.socket.connected) {
-        app.socket.emit('ssh_connect', connectionData);
-    } else {
-        // Fallback to REST API
-        try {
-            const response = await fetch('/api/ssh/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(connectionData),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                app.sshConnection = data.connection_id;
-                showSSHTerminal();
-                appendSSHOutput(`Connected to ${server.label}\n`);
-                sshCommandInput.disabled = false;
-                sshCommandInput.focus();
-            } else {
-                const data = await response.json();
-                showError(errorDiv, data.error || 'Failed to connect');
-            }
-        } catch (error) {
-            console.error('SSH connect error:', error);
-            showError(errorDiv, 'Failed to connect to SSH server');
-        }
-    }
-}
-
-function handleSSHDisconnect() {
-    if (app.sshConnection) {
-        const connectionId = app.sshConnection;
-        if (app.socket && app.socket.connected) {
-            app.socket.emit('ssh_disconnect', { connection_id: connectionId });
-        } else {
-            // Fallback to REST API
-            fetch(`/api/ssh/disconnect/${connectionId}`, {
-                method: 'POST',
-                credentials: 'include',
-            }).catch(err => console.error('Disconnect error:', err));
-        }
-        app.sshConnection = null;
-        hideSSHTerminal();
-    }
-}
-
-function handleSSHCommandKeypress(e) {
-    if (e.key === 'Enter') {
-        const command = sshCommandInput.value;
-        if (command.trim()) {
-            appendSSHOutput(`$ ${command}\n`);
-
-            if (app.socket && app.socket.connected) {
-                app.socket.emit('ssh_command', {
-                    connection_id: app.sshConnection,
-                    command: command
-                });
-            } else {
-                // Fallback to REST API
-                fetch('/api/ssh/execute', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        connection_id: app.sshConnection,
-                        command: command
-                    }),
-                }).then(res => res.json())
-                  .then(data => {
-                      if (data.output) {
-                          appendSSHOutput(data.output);
-                      }
-                  })
-                  .catch(err => console.error('Command error:', err));
-            }
-
-            sshCommandInput.value = '';
-        }
-    }
+  }
 }
 
 function showSSHTerminal() {
-    // Hide all tab contents and buttons
-    document.querySelectorAll('.ssh-tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.querySelectorAll('.ssh-tab-btn').forEach(btn => {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'not-allowed';
-    });
-    // Hide tabs container
-    document.querySelector('.ssh-tabs').style.display = 'none';
-    // Show terminal
-    sshTerminal.style.display = 'flex';
+  hide('ssh-connect-area');
+  show('ssh-terminal-wrap');
+  const cmd = document.getElementById('ssh-cmd');
+  cmd.disabled = false;
+  cmd.focus();
 }
 
 function hideSSHTerminal() {
-    // Hide terminal
-    sshTerminal.style.display = 'none';
-    sshOutput.innerHTML = '';
-    sshCommandInput.disabled = true;
-    sshCommandInput.value = '';
+  show('ssh-connect-area');
+  hide('ssh-terminal-wrap');
+  document.getElementById('ssh-output').textContent = '';
+  document.getElementById('ssh-cmd').disabled = true;
+  document.getElementById('ssh-cmd').value = '';
+}
 
-    // Re-enable tabs and show them
-    document.querySelector('.ssh-tabs').style.display = 'flex';
-    document.querySelectorAll('.ssh-tab-btn').forEach(btn => {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
+function appendSSH(text) {
+  const out = document.getElementById('ssh-output');
+  out.textContent += text;
+  out.scrollTop = out.scrollHeight;
+}
+
+function sshKey(e) {
+  if (e.key !== 'Enter') return;
+  const cmd = document.getElementById('ssh-cmd');
+  const command = cmd.value;
+  if (!command.trim() || !S.sshConnectionId) return;
+  appendSSH(`$ ${command}\n`);
+  cmd.value = '';
+
+  if (S.socket?.connected) {
+    S.socket.emit('ssh_command', { connection_id: S.sshConnectionId, command });
+  } else {
+    api('POST', '/api/ssh/execute', { connection_id: S.sshConnectionId, command })
+      .then(r => { if (r?.output) appendSSH(r.output); });
+  }
+}
+
+function sshDisconnect() {
+  if (!S.sshConnectionId) return;
+  if (S.socket?.connected) {
+    S.socket.emit('ssh_disconnect', { connection_id: S.sshConnectionId });
+  } else {
+    api('POST', `/api/ssh/disconnect/${S.sshConnectionId}`);
+    appendSSH('\nDisconnected.\n');
+    S.sshConnectionId = null;
+    hideSSHTerminal();
+  }
+}
+
+function bindSocketEvents() {
+  S.socket.on('ssh_connected', d => {
+    S.sshConnectionId = d.connection_id;
+    showSSHTerminal();
+    appendSSH(`Connected: ${d.message}\n`);
+  });
+  S.socket.on('ssh_output', d => { if (d.output) appendSSH(d.output); });
+  S.socket.on('ssh_disconnected', d => {
+    appendSSH(`\n${d.message}\n`);
+    S.sshConnectionId = null;
+    setTimeout(hideSSHTerminal, 1200);
+  });
+  S.socket.on('error', d => {
+    // Show error in whichever SSH form is active
+    const errId = document.getElementById('ssh-panel-manual').classList.contains('active')
+      ? 'ssh-manual-error' : 'ssh-stored-error';
+    showMsg(errId, 'error', d.message || 'SSH error');
+  });
+}
+
+// ------------------------------------------------------------------
+// Backup
+// ------------------------------------------------------------------
+function openBackupModal() { show('backup-backdrop'); }
+function closeBackupModal() { hide('backup-backdrop'); }
+
+async function doBackupExport() {
+  const pw = val('backup-export-pw'), pw2 = val('backup-export-pw2');
+  if (pw.length < 6) return showMsg('backup-export-msg', 'error', 'Password must be at least 6 characters.');
+  if (pw !== pw2) return showMsg('backup-export-msg', 'error', 'Passwords do not match.');
+  hide('backup-export-msg');
+
+  try {
+    const resp = await fetch('/api/backup/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ password: pw }),
     });
-
-    // Show the currently active tab's form by ensuring it has the active class
-    const activeTab = document.querySelector('.ssh-tab-btn.active');
-    if (activeTab) {
-        const tabName = activeTab.dataset.tab;
-        const activeContent = document.querySelector(`.ssh-tab-content[data-tab="${tabName}"]`);
-        if (activeContent) {
-            // Remove active class from all tab contents
-            document.querySelectorAll('.ssh-tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            // Add active class to the current tab
-            activeContent.classList.add('active');
-        }
+    if (!resp.ok) {
+      const err = await resp.json();
+      return showMsg('backup-export-msg', 'error', err.error || 'Export failed.');
     }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pacli_backup_${new Date().toISOString().slice(0,10)}.pacli`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showMsg('backup-export-msg', 'success', '✅ Backup downloaded! Store it somewhere safe.');
+  } catch (e) {
+    showMsg('backup-export-msg', 'error', 'Export failed: ' + e.message);
+  }
 }
 
-function appendSSHOutput(text) {
-    sshOutput.textContent += text;
-    sshOutput.scrollTop = sshOutput.scrollHeight;
+function onFileSelected(input) {
+  S.backupFile = input.files[0];
+  document.getElementById('upload-zone-label').textContent = `📄 ${S.backupFile.name}`;
 }
 
-function showSSHError(message) {
-    // Try to show error in the currently visible form
-    const manualErrorDiv = document.getElementById('ssh-form-error');
-    const storedErrorDiv = document.getElementById('ssh-stored-form-error');
-
-    // Check which tab is currently active
-    const activeTab = document.querySelector('.ssh-tab-btn.active');
-    if (activeTab && activeTab.dataset.tab === 'stored') {
-        showError(storedErrorDiv, message);
-    } else {
-        showError(manualErrorDiv, message);
-    }
+function handleFileDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  S.backupFile = e.dataTransfer.files[0];
+  if (S.backupFile) document.getElementById('upload-zone-label').textContent = `📄 ${S.backupFile.name}`;
 }
 
-function closeModals() {
-    secretModal.classList.remove('active');
-    viewModal.classList.remove('active');
-    sshModal.classList.remove('active');
-    secretLabel.disabled = false;
-    secretType.disabled = false;
-    app.isEditing = false;
-    clearTimeout(app.secretVisibilityTimeout);
+async function doBackupImport() {
+  if (!S.backupFile) return showMsg('backup-import-msg', 'error', 'Please select a backup file.');
+  const pw = val('backup-import-pw');
+  if (!pw) return showMsg('backup-import-msg', 'error', 'Backup password is required.');
+  const overwrite = document.getElementById('import-overwrite').checked;
+  hide('backup-import-msg');
+
+  const fd = new FormData();
+  fd.append('file', S.backupFile);
+  fd.append('password', pw);
+  fd.append('overwrite', overwrite ? 'true' : 'false');
+
+  try {
+    const resp = await fetch('/api/backup/import', { method: 'POST', credentials: 'include', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) return showMsg('backup-import-msg', 'error', data.error || 'Import failed.');
+    showMsg('backup-import-msg', 'success',
+      `✅ Import done: ${data.imported} imported, ${data.skipped} skipped, ${data.errors} errors.`);
+    await loadSecrets();
+  } catch (e) {
+    showMsg('backup-import-msg', 'error', 'Import failed: ' + e.message);
+  }
 }
 
-function showError(element, message) {
-    element.textContent = message;
-    element.classList.add('show');
+// ------------------------------------------------------------------
+// Tab switcher (generic)
+// ------------------------------------------------------------------
+function switchTab(group, panel, btn) {
+  // Buttons
+  btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Panels — find sibling panels by id prefix
+  document.querySelectorAll(`[id^="${group}-panel-"]`).forEach(p => p.classList.remove('active'));
+  document.getElementById(`${group}-panel-${panel}`).classList.add('active');
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+async function api(method, url, body) {
+  try {
+    const opts = { method, credentials: 'include', headers: {} };
+    if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    const r = await fetch(url, opts);
+    if (r.status === 401) { showLogin(); return null; }
+    return await r.json();
+  } catch (e) {
+    console.error('API error', url, e);
+    return null;
+  }
+}
+
+function val(id) { return document.getElementById(id).value.trim(); }
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function showMsg(id, type, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = `alert alert-${type}`;
+  el.textContent = text;
+  el.classList.remove('hidden');
 }
