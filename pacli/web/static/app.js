@@ -1,18 +1,20 @@
 /* ========================================================================
-   pacli Web UI — app.js
+   pacli Web UI — app.js  (improved)
    ======================================================================== */
 
-const S = {          // app state
+const S = {
   secrets: [],
   filter: 'all',
   query: '',
-  currentId: null,   // ID open in view modal
-  currentSecret: null, // full secret object (revealed)
-  editingId: null,   // null = new, string = update
+  currentId: null,
+  currentSecret: null,
+  editingId: null,
   sshConnectionId: null,
   socket: null,
   backupFile: null,
   revealTimer: null,
+  sshOutputPoller: null,
+  envFile: null,
 };
 
 // ------------------------------------------------------------------
@@ -26,7 +28,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!res.configured) return showSetup();
   if (res.authenticated) { showApp(); await loadSecrets(); }
   else showLogin();
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', handleGlobalKeydown);
 });
+
+function handleGlobalKeydown(e) {
+  // Esc closes any open modal
+  if (e.key === 'Escape') {
+    if (!document.getElementById('view-backdrop').classList.contains('hidden')) { closeViewModal(); return; }
+    if (!document.getElementById('edit-backdrop').classList.contains('hidden')) { closeEditModal(); return; }
+    if (!document.getElementById('ssh-backdrop').classList.contains('hidden')) { closeSSHModal(); return; }
+    if (!document.getElementById('backup-backdrop').classList.contains('hidden')) { closeBackupModal(); return; }
+    if (!document.getElementById('env-backdrop').classList.contains('hidden')) { closeEnvModal(); return; }
+  }
+  // Ctrl/Cmd+K = search focus
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  }
+  // Ctrl/Cmd+N = add secret
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault();
+    openAddModal();
+  }
+}
 
 // ------------------------------------------------------------------
 // Setup (first run)
@@ -86,7 +112,6 @@ async function loadSecrets() {
 function renderGrid() {
   const grid = document.getElementById('secrets-grid');
 
-  // Counts
   const counts = { all: S.secrets.length, password: 0, token: 0, ssh: 0 };
   S.secrets.forEach(s => { if (counts[s.type] !== undefined) counts[s.type]++; });
   Object.entries(counts).forEach(([k, v]) => {
@@ -95,7 +120,6 @@ function renderGrid() {
   });
   document.getElementById('total-count').textContent = `${counts.all} secret${counts.all !== 1 ? 's' : ''}`;
 
-  // Filter + search
   const visible = S.secrets.filter(s => {
     const matchFilter = S.filter === 'all' || s.type === S.filter;
     const matchQuery = !S.query || s.label.toLowerCase().includes(S.query);
@@ -107,15 +131,22 @@ function renderGrid() {
     return;
   }
 
-  grid.innerHTML = visible.map(s => `
+  grid.innerHTML = visible.map(s => {
+    const typeIcon = { password: '🔑', token: '🪙', ssh: '🖥️' }[s.type] || '🔐';
+    return `
     <div class="secret-card" onclick="openViewModal('${s.id}')">
       <div class="secret-card-top">
         <div class="secret-card-label">${esc(s.label)}</div>
-        <span class="badge badge-${s.type}">${s.type}</span>
+        <span class="badge badge-${s.type}">${typeIcon} ${s.type}</span>
       </div>
       <div class="secret-card-meta">Updated ${s.update_date}</div>
+      <div class="secret-card-actions" onclick="event.stopPropagation()">
+        <button class="card-action-btn" title="Quick copy" onclick="quickCopy('${s.id}')">📋</button>
+        ${s.type === 'ssh' ? `<button class="card-action-btn" title="Connect SSH" onclick="quickSSH('${s.id}')">⌨️</button>` : ''}
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function setFilter(f, btn) {
@@ -127,8 +158,34 @@ function setFilter(f, btn) {
 
 function doSearch(q) { S.query = q.toLowerCase(); renderGrid(); }
 
+// Quick copy from card (no modal needed)
+async function quickCopy(id) {
+  const res = await api('GET', `/api/secrets/${id}/reveal`);
+  if (!res?.secret) return;
+  let text = res.secret;
+  // For SSH, copy just the connection string
+  if (res.type === 'ssh' || (S.secrets.find(s => s.id === id)?.type === 'ssh')) {
+    text = text.split('|')[0].replace(':', '@');
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('📋 Copied!');
+  } catch {
+    showToast('❌ Clipboard denied', 'error');
+  }
+}
+
+// Quick SSH connect from card
+function quickSSH(id) {
+  openSSHModal();
+  // Switch to stored tab and pre-select
+  const storedBtn = document.querySelector('[onclick*="stored"]');
+  if (storedBtn) switchTab('ssh', 'stored', storedBtn);
+  document.getElementById('ssh-stored-select').value = id;
+}
+
 // ------------------------------------------------------------------
-// Add / Edit modal
+// Add / Edit modal — TYPE-AWARE FORM
 // ------------------------------------------------------------------
 function openAddModal() {
   S.editingId = null;
@@ -137,8 +194,9 @@ function openAddModal() {
   document.getElementById('edit-label').disabled = false;
   document.getElementById('edit-type').value = 'password';
   document.getElementById('edit-type').disabled = false;
-  document.getElementById('edit-value').value = '';
+  clearStrengthMeter();
   hide('edit-error');
+  renderSecretTypeForm('password');
   show('edit-backdrop');
   document.getElementById('edit-label').focus();
 }
@@ -153,20 +211,220 @@ function openEditFromView() {
   document.getElementById('edit-label').disabled = true;
   document.getElementById('edit-type').value = s.type;
   document.getElementById('edit-type').disabled = true;
-  // Pre-fill with current revealed value if available, else blank
-  document.getElementById('edit-value').value = S.currentSecret?.secret || '';
   hide('edit-error');
+  renderSecretTypeForm(s.type, S.currentSecret?.secret || '');
   show('edit-backdrop');
-  document.getElementById('edit-value').focus();
 }
 
 function closeEditModal() { hide('edit-backdrop'); }
 
+// Render the right input fields based on secret type
+function renderSecretTypeForm(type, existingValue = '') {
+  const container = document.getElementById('edit-fields-container');
+
+  if (type === 'password') {
+    const parts = existingValue ? existingValue.split(':') : [];
+    const user = parts[0] || '';
+    const pass = parts.slice(1).join(':') || '';
+    container.innerHTML = `
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="edit-username" placeholder="username" value="${esc(user)}" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <div class="pw-input-wrap">
+          <input type="password" id="edit-password" placeholder="password" value="${esc(pass)}"
+            oninput="updateStrength(this.value)" autocomplete="new-password" />
+          <button type="button" class="pw-toggle" onclick="togglePwVisibility('edit-password', this)">👁</button>
+        </div>
+        <div id="strength-bar-wrap" class="strength-wrap">
+          <div id="strength-bar" class="strength-bar"></div>
+        </div>
+        <div id="strength-label" class="strength-label"></div>
+      </div>
+    `;
+  } else if (type === 'token') {
+    container.innerHTML = `
+      <div class="field">
+        <label>Token / API Key</label>
+        <div class="pw-input-wrap">
+          <textarea id="edit-token" rows="3" placeholder="Paste your token or API key here"
+            oninput="updateStrength(this.value)">${esc(existingValue)}</textarea>
+          <button type="button" class="pw-toggle textarea-toggle" onclick="toggleTokenVisibility()">👁</button>
+        </div>
+        <div id="strength-bar-wrap" class="strength-wrap">
+          <div id="strength-bar" class="strength-bar"></div>
+        </div>
+        <div id="strength-label" class="strength-label"></div>
+      </div>
+    `;
+  } else if (type === 'ssh') {
+    // Parse existing SSH value: user:host|key:path|port:22|opts:...
+    let user = '', host = '', port = '22', keyPath = '', opts = '';
+    if (existingValue) {
+      const parts = existingValue.split('|');
+      const userHost = parts[0];
+      if (userHost.includes(':')) { [user, host] = userHost.split(':', 2); }
+      parts.slice(1).forEach(p => {
+        if (p.startsWith('key:')) keyPath = p.slice(4);
+        else if (p.startsWith('port:')) port = p.slice(5);
+        else if (p.startsWith('opts:')) opts = p.slice(5);
+      });
+    }
+    container.innerHTML = `
+      <div class="ssh-form-grid">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="ssh-edit-user" placeholder="ubuntu" value="${esc(user)}" />
+        </div>
+        <div class="field">
+          <label>Hostname / IP</label>
+          <input type="text" id="ssh-edit-host" placeholder="192.168.1.100 or server.com" value="${esc(host)}" />
+        </div>
+        <div class="field">
+          <label>Port</label>
+          <input type="number" id="ssh-edit-port" placeholder="22" value="${esc(port)}" min="1" max="65535" />
+        </div>
+        <div class="field">
+          <label>Key path <span class="optional-tag">optional</span></label>
+          <input type="text" id="ssh-edit-key" placeholder="~/.ssh/id_rsa" value="${esc(keyPath)}" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Extra SSH options <span class="optional-tag">optional</span></label>
+        <input type="text" id="ssh-edit-opts" placeholder="-o StrictHostKeyChecking=no" value="${esc(opts)}" />
+      </div>
+      <div class="field">
+        <label>Password <span class="optional-tag">optional — for password auth</span></label>
+        <div class="pw-input-wrap">
+          <input type="password" id="ssh-edit-password" placeholder="SSH password (leave blank for key auth)" autocomplete="new-password" />
+          <button type="button" class="pw-toggle" onclick="togglePwVisibility('ssh-edit-password', this)">👁</button>
+        </div>
+      </div>
+      <div class="ssh-edit-preview" id="ssh-preview">
+        <span class="preview-label">Preview:</span>
+        <code id="ssh-preview-cmd">ssh ${user ? user + '@' : ''}${host || '<host>'}${port && port !== '22' ? ' -p ' + port : ''}${keyPath ? ' -i ' + keyPath : ''}</code>
+      </div>
+    `;
+    // Live preview update
+    ['ssh-edit-user', 'ssh-edit-host', 'ssh-edit-port', 'ssh-edit-key'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateSSHPreview);
+    });
+  }
+}
+
+function updateSSHPreview() {
+  const user = document.getElementById('ssh-edit-user')?.value || '';
+  const host = document.getElementById('ssh-edit-host')?.value || '<host>';
+  const port = document.getElementById('ssh-edit-port')?.value || '22';
+  const key = document.getElementById('ssh-edit-key')?.value || '';
+  const portPart = port && port !== '22' ? ` -p ${port}` : '';
+  const keyPart = key ? ` -i ${key}` : '';
+  const cmd = `ssh ${user ? user + '@' : ''}${host}${portPart}${keyPart}`;
+  const el = document.getElementById('ssh-preview-cmd');
+  if (el) el.textContent = cmd;
+}
+
+function onEditTypeChange() {
+  const type = document.getElementById('edit-type').value;
+  renderSecretTypeForm(type);
+}
+
+function togglePwVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+  else { input.type = 'password'; btn.textContent = '👁'; }
+}
+
+function toggleTokenVisibility() {
+  const ta = document.getElementById('edit-token');
+  if (!ta) return;
+  const btn = ta.parentElement.querySelector('.pw-toggle');
+  if (ta.classList.contains('token-hidden')) {
+    ta.classList.remove('token-hidden');
+    if (btn) btn.textContent = '🙈';
+  } else {
+    ta.classList.add('token-hidden');
+    if (btn) btn.textContent = '👁';
+  }
+}
+
+// Password strength
+function updateStrength(value) {
+  const bar = document.getElementById('strength-bar');
+  const label = document.getElementById('strength-label');
+  if (!bar || !label) return;
+  const score = calcStrength(value);
+  const levels = [
+    { cls: 'str-weak', text: 'Weak', color: '#f56565' },
+    { cls: 'str-fair', text: 'Fair', color: '#f6ad55' },
+    { cls: 'str-good', text: 'Good', color: '#68d391' },
+    { cls: 'str-strong', text: 'Strong', color: '#3ecf8e' },
+  ];
+  const lvl = levels[Math.min(score, 3)];
+  bar.style.width = `${(score + 1) * 25}%`;
+  bar.style.background = lvl.color;
+  label.textContent = value ? lvl.text : '';
+  label.style.color = lvl.color;
+}
+
+function calcStrength(pw) {
+  if (!pw || pw.length < 4) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 16) score++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+  if (/\d/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return Math.min(Math.floor(score * 0.75), 3);
+}
+
+function clearStrengthMeter() {
+  const bar = document.getElementById('strength-bar');
+  const label = document.getElementById('strength-label');
+  if (bar) { bar.style.width = '0'; bar.style.background = ''; }
+  if (label) label.textContent = '';
+}
+
+// Collect secret value from the type-specific form
+function collectSecretValue(type) {
+  if (type === 'password') {
+    const user = document.getElementById('edit-username')?.value.trim() || '';
+    const pass = document.getElementById('edit-password')?.value || '';
+    if (!user || !pass) return null;
+    return `${user}:${pass}`;
+  } else if (type === 'token') {
+    const token = document.getElementById('edit-token')?.value.trim() || '';
+    return token || null;
+  } else if (type === 'ssh') {
+    const user = document.getElementById('ssh-edit-user')?.value.trim() || '';
+    const host = document.getElementById('ssh-edit-host')?.value.trim() || '';
+    const port = document.getElementById('ssh-edit-port')?.value.trim() || '22';
+    const key = document.getElementById('ssh-edit-key')?.value.trim() || '';
+    const opts = document.getElementById('ssh-edit-opts')?.value.trim() || '';
+    if (!user || !host) return null;
+    let val = `${user}:${host}`;
+    if (key) val += `|key:${key}`;
+    if (port && port !== '22') val += `|port:${port}`;
+    if (opts) val += `|opts:${opts}`;
+    return val;
+  }
+  return null;
+}
+
 async function saveSecret() {
   const label = document.getElementById('edit-label').value.trim();
-  const type  = document.getElementById('edit-type').value;
-  const secret = document.getElementById('edit-value').value.trim();
-  if (!label || !secret) return showMsg('edit-error', 'error', 'Label and secret value are required.');
+  const type = document.getElementById('edit-type').value;
+  const secret = collectSecretValue(type);
+
+  if (!label) return showMsg('edit-error', 'error', 'Label is required.');
+  if (!secret) {
+    const fieldHints = { password: 'username and password', token: 'token value', ssh: 'username and hostname' };
+    return showMsg('edit-error', 'error', `Please fill in ${fieldHints[type] || 'all required fields'}.`);
+  }
   hide('edit-error');
 
   let res;
@@ -176,7 +434,7 @@ async function saveSecret() {
     res = await api('POST', '/api/secrets', { label, type, secret });
   }
 
-  if (res?.success) { closeEditModal(); await loadSecrets(); }
+  if (res?.success) { closeEditModal(); await loadSecrets(); showToast('✅ Secret saved!'); }
   else showMsg('edit-error', 'error', res?.error || 'Save failed.');
 }
 
@@ -190,12 +448,15 @@ async function openViewModal(id) {
   S.currentSecret = null;
 
   document.getElementById('view-title-text').textContent = s.label;
-  document.getElementById('view-label-val').textContent  = s.label;
-  document.getElementById('view-type-val').textContent   = s.type;
+  document.getElementById('view-label-val').textContent = s.label;
+  document.getElementById('view-type-val').innerHTML = `<span class="badge badge-${s.type}">${s.type}</span>`;
   document.getElementById('view-created-val').textContent = new Date(s.creation_time * 1000).toLocaleString();
   document.getElementById('view-updated-val').textContent = new Date(s.update_time * 1000).toLocaleString();
 
-  // Reset reveal state
+  // Show SSH-specific connect button
+  const sshBtn = document.getElementById('view-ssh-btn');
+  if (sshBtn) sshBtn.style.display = s.type === 'ssh' ? 'inline-flex' : 'none';
+
   setRevealMasked();
   hide('view-msg');
   show('view-backdrop');
@@ -209,14 +470,37 @@ function setRevealMasked() {
   clearTimeout(S.revealTimer);
 }
 
-function setRevealVisible(text) {
+function setRevealVisible(text, type) {
   const el = document.getElementById('reveal-text');
-  el.textContent = text;
+  // Pretty-print based on type
+  if (type === 'ssh') {
+    el.innerHTML = formatSSHDisplay(text);
+  } else if (type === 'password') {
+    const parts = text.split(':');
+    if (parts.length >= 2) {
+      el.innerHTML = `<span class="reveal-field-label">user:</span><span>${esc(parts[0])}</span>  <span class="reveal-field-label">pass:</span><span>${esc(parts.slice(1).join(':'))}</span>`;
+    } else {
+      el.textContent = text;
+    }
+  } else {
+    el.textContent = text;
+  }
   el.classList.remove('masked');
   document.getElementById('reveal-toggle-btn').textContent = '🙈 Hide';
-  // Auto-hide after 30s
   clearTimeout(S.revealTimer);
   S.revealTimer = setTimeout(setRevealMasked, 30000);
+}
+
+function formatSSHDisplay(raw) {
+  const parts = raw.split('|');
+  const userHost = parts[0];
+  let html = `<span class="reveal-field-label">conn:</span><span>${esc(userHost.replace(':', '@'))}</span>`;
+  parts.slice(1).forEach(p => {
+    if (p.startsWith('key:')) html += `  <span class="reveal-field-label">key:</span><span>${esc(p.slice(4))}</span>`;
+    else if (p.startsWith('port:')) html += `  <span class="reveal-field-label">port:</span><span>${esc(p.slice(5))}</span>`;
+    else if (p.startsWith('opts:')) html += `  <span class="reveal-field-label">opts:</span><span>${esc(p.slice(5))}</span>`;
+  });
+  return html;
 }
 
 async function fetchSecret() {
@@ -231,27 +515,59 @@ async function fetchSecret() {
 
 async function toggleReveal() {
   const el = document.getElementById('reveal-text');
-  if (!el.classList.contains('masked')) {
-    // Currently visible — hide
-    setRevealMasked();
-    return;
-  }
+  if (!el.classList.contains('masked')) { setRevealMasked(); return; }
   const text = await fetchSecret();
   if (text === null) return showMsg('view-msg', 'error', 'Failed to reveal secret.');
-  setRevealVisible(text);
+  const s = S.secrets.find(x => x.id === S.currentId);
+  setRevealVisible(text, s?.type);
 }
 
 async function copySecret() {
-  // Copy works regardless of reveal state
+  const text = await fetchSecret();
+  if (text === null) return showMsg('view-msg', 'error', 'Failed to retrieve secret.');
+  const s = S.secrets.find(x => x.id === S.currentId);
+  let copyText = text;
+  // For SSH copy the connection string (user@host)
+  if (s?.type === 'ssh') copyText = text.split('|')[0].replace(':', '@');
+  // For password, let user choose — default copy just password part
+  if (s?.type === 'password') {
+    const parts = text.split(':');
+    copyText = parts.length >= 2 ? parts.slice(1).join(':') : text;
+  }
+  try {
+    await navigator.clipboard.writeText(copyText);
+    showMsg('view-msg', 'success', '📋 Copied to clipboard!');
+    setTimeout(() => hide('view-msg'), 2500);
+  } catch {
+    showMsg('view-msg', 'error', 'Clipboard access denied.');
+  }
+}
+
+// Copy full secret (for password: user:pass, for ssh: full string)
+async function copyFullSecret() {
   const text = await fetchSecret();
   if (text === null) return showMsg('view-msg', 'error', 'Failed to retrieve secret.');
   try {
     await navigator.clipboard.writeText(text);
-    showMsg('view-msg', 'success', '📋 Copied to clipboard!');
+    showMsg('view-msg', 'success', '📋 Full secret copied!');
     setTimeout(() => hide('view-msg'), 2500);
   } catch {
-    showMsg('view-msg', 'error', 'Clipboard access denied. Please allow clipboard permissions.');
+    showMsg('view-msg', 'error', 'Clipboard access denied.');
   }
+}
+
+// Copy username specifically (for password type)
+async function copyUsername() {
+  const text = await fetchSecret();
+  if (text === null) return;
+  const s = S.secrets.find(x => x.id === S.currentId);
+  if (s?.type !== 'password') return;
+  const username = text.split(':')[0];
+  try {
+    await navigator.clipboard.writeText(username);
+    showMsg('view-msg', 'success', '📋 Username copied!');
+    setTimeout(() => hide('view-msg'), 2500);
+  } catch { }
 }
 
 function closeViewModal() {
@@ -265,12 +581,24 @@ async function deleteSecret() {
   const s = S.secrets.find(x => x.id === S.currentId);
   if (!confirm(`Delete "${s?.label}"? This cannot be undone.`)) return;
   const res = await api('DELETE', `/api/secrets/${S.currentId}`);
-  if (res?.success) { closeViewModal(); await loadSecrets(); }
+  if (res?.success) { closeViewModal(); await loadSecrets(); showToast('🗑️ Deleted'); }
   else alert(res?.error || 'Delete failed.');
 }
 
+function openSSHFromView() {
+  closeViewModal();
+  openSSHModal();
+  setTimeout(() => {
+    const storedTab = document.querySelector('.tab-btn[onclick*="stored"]');
+    if (storedTab) {
+      switchTab('ssh', 'stored', storedTab);
+      document.getElementById('ssh-stored-select').value = S.currentId || '';
+    }
+  }, 100);
+}
+
 // ------------------------------------------------------------------
-// SSH Terminal
+// SSH Terminal — improved with output polling + reconnect
 // ------------------------------------------------------------------
 function openSSHModal() { show('ssh-backdrop'); }
 function closeSSHModal() {
@@ -283,14 +611,13 @@ function closeSSHModal() {
 
 function toggleSSHAuth() {
   const v = document.getElementById('ssh-auth').value;
-  document.getElementById('ssh-pw-field').style.display    = v === 'password' ? '' : 'none';
-  document.getElementById('ssh-key-fields').style.display  = v === 'key' ? '' : 'none';
+  document.getElementById('ssh-pw-field').style.display = v === 'password' ? '' : 'none';
+  document.getElementById('ssh-key-fields').style.display = v === 'key' ? '' : 'none';
 }
 
 function populateSSHDropdowns() {
   const sshSecrets = S.secrets.filter(s => s.type === 'ssh');
 
-  // Key select (for manual connection)
   const ks = document.getElementById('ssh-key-select');
   ks.innerHTML = '<option value="">— Choose stored key —</option>';
   sshSecrets.forEach(s => {
@@ -299,7 +626,6 @@ function populateSSHDropdowns() {
     ks.appendChild(o);
   });
 
-  // Stored server select
   const ss = document.getElementById('ssh-stored-select');
   ss.innerHTML = '<option value="">— Choose —</option>';
   sshSecrets.forEach(s => {
@@ -312,6 +638,7 @@ function populateSSHDropdowns() {
 async function sshConnect(mode) {
   const errId = mode === 'manual' ? 'ssh-manual-error' : 'ssh-stored-error';
   hide(errId);
+  clearSSHStatus();
 
   let payload = {};
 
@@ -343,28 +670,44 @@ async function sshConnect(mode) {
     payload = { key_id: keyId };
   }
 
-  // Connect via WebSocket
+  setSSHStatus('connecting', 'Connecting…');
+
   if (S.socket?.connected) {
     S.socket.emit('ssh_connect', payload);
   } else {
-    // REST fallback
     const r = await api('POST', '/api/ssh/connect', payload);
     if (r?.success) {
       S.sshConnectionId = r.connection_id;
-      showSSHTerminal();
-      appendSSH(`Connected: ${r.message}\n`);
+      showSSHTerminal(`Connected: ${r.message}\n`);
+      startSSHOutputPoller();
     } else {
+      setSSHStatus('error', 'Failed');
       showMsg(errId, 'error', r?.error || 'Connection failed.');
     }
   }
 }
 
-function showSSHTerminal() {
+function setSSHStatus(state, text) {
+  const el = document.getElementById('ssh-status');
+  if (!el) return;
+  el.className = `ssh-status ssh-status-${state}`;
+  el.textContent = text;
+  el.style.display = 'inline-flex';
+}
+
+function clearSSHStatus() {
+  const el = document.getElementById('ssh-status');
+  if (el) el.style.display = 'none';
+}
+
+function showSSHTerminal(welcomeMsg) {
   hide('ssh-connect-area');
   show('ssh-terminal-wrap');
   const cmd = document.getElementById('ssh-cmd');
   cmd.disabled = false;
   cmd.focus();
+  if (welcomeMsg) appendSSH(welcomeMsg);
+  setSSHStatus('connected', 'Connected');
 }
 
 function hideSSHTerminal() {
@@ -373,6 +716,8 @@ function hideSSHTerminal() {
   document.getElementById('ssh-output').textContent = '';
   document.getElementById('ssh-cmd').disabled = true;
   document.getElementById('ssh-cmd').value = '';
+  clearSSHStatus();
+  stopSSHOutputPoller();
 }
 
 function appendSSH(text) {
@@ -381,12 +726,33 @@ function appendSSH(text) {
   out.scrollTop = out.scrollHeight;
 }
 
+// Poll for output when using REST fallback
+function startSSHOutputPoller() {
+  stopSSHOutputPoller();
+  S.sshOutputPoller = setInterval(async () => {
+    if (!S.sshConnectionId) return stopSSHOutputPoller();
+    const r = await api('GET', `/api/ssh/output/${S.sshConnectionId}`);
+    if (r?.output) appendSSH(r.output);
+    if (r?.disconnected) {
+      appendSSH('\n[Connection closed]\n');
+      S.sshConnectionId = null;
+      stopSSHOutputPoller();
+      setTimeout(hideSSHTerminal, 1500);
+    }
+  }, 300);
+}
+
+function stopSSHOutputPoller() {
+  if (S.sshOutputPoller) { clearInterval(S.sshOutputPoller); S.sshOutputPoller = null; }
+}
+
 function sshKey(e) {
   if (e.key !== 'Enter') return;
   const cmd = document.getElementById('ssh-cmd');
   const command = cmd.value;
-  if (!command.trim() || !S.sshConnectionId) return;
-  appendSSH(`$ ${command}\n`);
+  if (!S.sshConnectionId) return;
+  // Show command echo
+  appendSSH(`\r\n`);
   cmd.value = '';
 
   if (S.socket?.connected) {
@@ -399,34 +765,107 @@ function sshKey(e) {
 
 function sshDisconnect() {
   if (!S.sshConnectionId) return;
+  stopSSHOutputPoller();
   if (S.socket?.connected) {
     S.socket.emit('ssh_disconnect', { connection_id: S.sshConnectionId });
   } else {
     api('POST', `/api/ssh/disconnect/${S.sshConnectionId}`);
-    appendSSH('\nDisconnected.\n');
+    appendSSH('\n[Disconnected]\n');
     S.sshConnectionId = null;
-    hideSSHTerminal();
+    setTimeout(hideSSHTerminal, 1000);
   }
+}
+
+function clearSSHOutput() {
+  document.getElementById('ssh-output').textContent = '';
 }
 
 function bindSocketEvents() {
   S.socket.on('ssh_connected', d => {
     S.sshConnectionId = d.connection_id;
-    showSSHTerminal();
-    appendSSH(`Connected: ${d.message}\n`);
+    showSSHTerminal(`Connected: ${d.message}\n`);
   });
-  S.socket.on('ssh_output', d => { if (d.output) appendSSH(d.output); });
+  S.socket.on('ssh_output', d => {
+    if (d.output) appendSSH(d.output);
+  });
   S.socket.on('ssh_disconnected', d => {
-    appendSSH(`\n${d.message}\n`);
+    appendSSH(`\n[${d.message}]\n`);
     S.sshConnectionId = null;
-    setTimeout(hideSSHTerminal, 1200);
+    setSSHStatus('disconnected', 'Disconnected');
+    setTimeout(hideSSHTerminal, 1500);
   });
   S.socket.on('error', d => {
-    // Show error in whichever SSH form is active
+    setSSHStatus('error', 'Error');
     const errId = document.getElementById('ssh-panel-manual').classList.contains('active')
       ? 'ssh-manual-error' : 'ssh-stored-error';
     showMsg(errId, 'error', d.message || 'SSH error');
   });
+}
+
+// ------------------------------------------------------------------
+// .env Import
+// ------------------------------------------------------------------
+function openEnvModal() { show('env-backdrop'); }
+function closeEnvModal() { hide('env-backdrop'); S.envFile = null; }
+
+function onEnvFileSelected(input) {
+  S.envFile = input.files[0];
+  if (!S.envFile) return;
+  const reader = new FileReader();
+  reader.onload = e => previewEnvFile(e.target.result);
+  reader.readAsText(S.envFile);
+}
+
+function previewEnvFile(content) {
+  const preview = document.getElementById('env-preview');
+  const lines = content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#') && l.includes('='));
+  if (!lines.length) {
+    preview.innerHTML = '<p class="env-no-items">No valid KEY=VALUE lines found.</p>';
+    return;
+  }
+  preview.innerHTML = `
+    <p class="env-preview-title">${lines.length} secret(s) found — select which to import:</p>
+    <div class="env-select-all">
+      <label><input type="checkbox" id="env-check-all" onchange="toggleAllEnvItems(this)" checked /> Select all</label>
+    </div>
+    ${lines.map((line, i) => {
+      const eqIdx = line.indexOf('=');
+      const key = line.slice(0, eqIdx).trim();
+      const val = line.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+      return `
+        <div class="env-item">
+          <label>
+            <input type="checkbox" class="env-item-check" data-key="${esc(key)}" data-val="${esc(val)}" checked />
+            <code class="env-key">${esc(key)}</code>
+            <span class="env-val-preview">${val.length > 30 ? val.slice(0, 30) + '…' : esc(val)}</span>
+          </label>
+        </div>`;
+    }).join('')}
+  `;
+  show('env-import-btn');
+}
+
+function toggleAllEnvItems(checkbox) {
+  document.querySelectorAll('.env-item-check').forEach(cb => cb.checked = checkbox.checked);
+}
+
+async function doEnvImport() {
+  const checks = document.querySelectorAll('.env-item-check:checked');
+  if (!checks.length) return showMsg('env-msg', 'error', 'No items selected.');
+  hide('env-msg');
+
+  let imported = 0, errors = 0;
+  for (const cb of checks) {
+    const key = cb.dataset.key;
+    const secretVal = cb.dataset.val;
+    const res = await api('POST', '/api/secrets', { label: key, type: 'token', secret: secretVal });
+    if (res?.success) imported++;
+    else errors++;
+  }
+
+  showMsg('env-msg', 'success', `✅ ${imported} imported${errors ? `, ${errors} failed` : ''}.`);
+  await loadSecrets();
+  setTimeout(() => closeEnvModal(), 2000);
 }
 
 // ------------------------------------------------------------------
@@ -456,7 +895,7 @@ async function doBackupExport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pacli_backup_${new Date().toISOString().slice(0,10)}.pacli`;
+    a.download = `pacli_backup_${new Date().toISOString().slice(0, 10)}.pacli`;
     a.click();
     URL.revokeObjectURL(url);
     showMsg('backup-export-msg', 'success', '✅ Backup downloaded! Store it somewhere safe.');
@@ -502,15 +941,29 @@ async function doBackupImport() {
 }
 
 // ------------------------------------------------------------------
-// Tab switcher (generic)
+// Tab switcher
 // ------------------------------------------------------------------
 function switchTab(group, panel, btn) {
-  // Buttons
   btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  // Panels — find sibling panels by id prefix
   document.querySelectorAll(`[id^="${group}-panel-"]`).forEach(p => p.classList.remove('active'));
   document.getElementById(`${group}-panel-${panel}`).classList.add('active');
+}
+
+// ------------------------------------------------------------------
+// Toast notifications
+// ------------------------------------------------------------------
+function showToast(msg, type = 'success') {
+  let toast = document.getElementById('global-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'global-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.className = `toast toast-${type} toast-show`;
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('toast-show'), 2500);
 }
 
 // ------------------------------------------------------------------
@@ -529,10 +982,13 @@ async function api(method, url, body) {
   }
 }
 
-function val(id) { return document.getElementById(id).value.trim(); }
-function show(id) { document.getElementById(id).classList.remove('hidden'); }
-function hide(id) { document.getElementById(id).classList.add('hidden'); }
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function val(id) { return document.getElementById(id)?.value?.trim() || ''; }
+function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML;
+}
 
 function showMsg(id, type, text) {
   const el = document.getElementById(id);

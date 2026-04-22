@@ -50,12 +50,10 @@ def create_app():
 
     @app.route("/api/setup/status", methods=["GET"])
     def setup_status():
-        """Tell the UI whether pacli has been configured yet."""
         return jsonify({"configured": store.is_master_set()})
 
     @app.route("/api/setup/init", methods=["POST"])
     def setup_init():
-        """First-run: set the master password from the Web UI."""
         if store.is_master_set():
             return jsonify({"error": "Already configured"}), 400
 
@@ -68,7 +66,6 @@ def create_app():
         if password != confirm:
             return jsonify({"error": "Passwords do not match"}), 400
 
-        # Bootstrap master password programmatically
         from ..store import get_salt, PASSWORD_HASH_PATH, SALT_PATH
         import hashlib
 
@@ -166,7 +163,11 @@ def create_app():
         try:
             secret = store.get_secret_by_id(secret_id)
             if secret:
-                return jsonify({"secret": secret.get("secret")})
+                return jsonify({
+                    "secret": secret.get("secret"),
+                    "type": secret.get("type"),
+                    "label": secret.get("label"),
+                })
             return jsonify({"error": "Secret not found"}), 404
         except Exception as e:
             logger.error(f"Error revealing secret {secret_id}: {e}")
@@ -182,6 +183,8 @@ def create_app():
             secret_type = data.get("type", "password")
             if not label or not secret:
                 return jsonify({"error": "Label and secret are required"}), 400
+            if secret_type not in ("password", "token", "ssh"):
+                return jsonify({"error": "Invalid secret type"}), 400
             store.save_secret(label, secret, secret_type)
             return jsonify({"success": True, "message": "Secret created"}), 201
         except Exception as e:
@@ -280,7 +283,7 @@ def create_app():
             return jsonify({"error": str(e)}), 500
 
     # ------------------------------------------------------------------
-    # SSH REST fallback
+    # SSH REST endpoints (fallback when WebSocket unavailable)
     # ------------------------------------------------------------------
 
     @app.route("/api/ssh/connect", methods=["POST"])
@@ -288,44 +291,30 @@ def create_app():
     def ssh_connect():
         try:
             data = request.get_json()
-            hostname = data.get("hostname")
-            username = data.get("username")
-            port = data.get("port", 22)
-            password = data.get("password")
-            key_id = data.get("key_id")
-            ssh_key = data.get("ssh_key")
+            hostname, username, port, password, key_id, ssh_key = _extract_ssh_params(data)
 
             if key_id and not hostname:
-                secret = store.get_secret_by_id(key_id)
-                if not secret:
-                    return jsonify({"error": "SSH server not found"}), 404
-                ssh_data = secret.get("secret", "")
-                if "|" in ssh_data and ":" in ssh_data.split("|")[0]:
-                    parts = ssh_data.split("|")
-                    user_ip = parts[0]
-                    if ":" not in user_ip:
-                        return jsonify({"error": "Invalid SSH format"}), 400
-                    username, hostname = user_ip.split(":", 1)
-                    for part in parts[1:]:
-                        if part.startswith("port:"):
-                            try:
-                                port = int(part[5:])
-                            except ValueError:
-                                pass
-                    key_id = None
-                else:
-                    return jsonify({"error": "Incomplete SSH config — use manual connection"}), 400
+                result = _resolve_stored_ssh(store, key_id)
+                if isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], str) and result[0].startswith("error:"):
+                    return jsonify({"error": result[0][6:]}), 400
+                username, hostname, port = result
 
             if not hostname or not username:
                 return jsonify({"error": "Hostname and username are required"}), 400
 
-            key_filename = _resolve_key(store, ssh_key, key_id)
+            key_filename = _resolve_key(store, ssh_key, None)
 
             connection_id = str(uuid.uuid4())
-            if ssh_manager.create_connection(connection_id, hostname, username, port, password, key_filename):
-                return jsonify({"success": True, "connection_id": connection_id,
-                                "message": f"Connected to {username}@{hostname}"}), 201
-            return jsonify({"error": "SSH connection failed"}), 400
+            success = ssh_manager.create_connection(
+                connection_id, hostname, username, port, password, key_filename
+            )
+            if success:
+                return jsonify({
+                    "success": True,
+                    "connection_id": connection_id,
+                    "message": f"Connected to {username}@{hostname}",
+                }), 201
+            return jsonify({"error": "SSH connection failed. Check credentials and host."}), 400
         except Exception as e:
             logger.error(f"SSH connect error: {e}")
             return jsonify({"error": str(e)}), 500
@@ -345,20 +334,40 @@ def create_app():
         try:
             data = request.get_json()
             connection_id = data.get("connection_id")
-            command = data.get("command")
-            if not connection_id or not command:
-                return jsonify({"error": "connection_id and command required"}), 400
+            command = data.get("command", "")
+            if not connection_id:
+                return jsonify({"error": "connection_id required"}), 400
+
             terminal = ssh_manager.get_connection(connection_id)
             if not terminal:
-                return jsonify({"error": "Connection not found"}), 404
+                return jsonify({"error": "Connection not found or timed out"}), 404
+
             if terminal.send_command(command + "\n"):
                 import time
-                time.sleep(0.5)
+                # Wait a bit longer for output to arrive
+                time.sleep(0.4)
                 output = terminal.get_output()
                 return jsonify({"success": True, "output": output})
             return jsonify({"error": "Failed to send command"}), 400
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/ssh/output/<connection_id>", methods=["GET"])
+    @require_auth
+    def ssh_get_output(connection_id):
+        """Poll endpoint for SSH output — used by REST fallback mode."""
+        try:
+            terminal = ssh_manager.get_connection(connection_id)
+            if not terminal:
+                return jsonify({"output": "", "disconnected": True})
+            output = terminal.get_output()
+            return jsonify({
+                "output": output,
+                "connected": terminal.connected,
+                "disconnected": not terminal.connected,
+            })
+        except Exception as e:
+            return jsonify({"output": "", "disconnected": True, "error": str(e)})
 
     # ------------------------------------------------------------------
     # WebSocket SSH
@@ -390,43 +399,29 @@ def create_app():
             ssh_key = data.get("ssh_key")
 
             if key_id and not hostname:
-                secret = store.get_secret_by_id(key_id)
-                if not secret:
-                    emit("error", {"message": "SSH server not found"})
+                result = _resolve_stored_ssh(store, key_id)
+                if isinstance(result, str) and result.startswith("error:"):
+                    emit("error", {"message": result[6:]})
                     return
-                ssh_data = secret.get("secret", "")
-                if "|" in ssh_data and ":" in ssh_data.split("|")[0]:
-                    parts = ssh_data.split("|")
-                    user_ip = parts[0]
-                    if ":" not in user_ip:
-                        emit("error", {"message": "Invalid SSH format"})
-                        return
-                    username, hostname = user_ip.split(":", 1)
-                    for part in parts[1:]:
-                        if part.startswith("port:"):
-                            try:
-                                port = int(part[5:])
-                            except ValueError:
-                                pass
-                    key_id = None
-                else:
-                    emit("error", {"message": "Incomplete SSH config — use manual connection"})
-                    return
+                username, hostname, port = result
 
             if not hostname or not username:
                 emit("error", {"message": "Hostname and username required"})
                 return
 
-            key_filename = _resolve_key(store, ssh_key, key_id)
+            key_filename = _resolve_key(store, ssh_key, None)
             connection_id = str(uuid.uuid4())
+
             if ssh_manager.create_connection(connection_id, hostname, username, port, password, key_filename):
                 join_room(connection_id)
                 emit("ssh_connected", {
                     "connection_id": connection_id,
-                    "message": f"Connected to {username}@{hostname}",
+                    "message": f"Connected to {username}@{hostname}:{port}",
                 })
+                # Start streaming output to client
+                _start_output_streaming(socketio, ssh_manager, connection_id)
             else:
-                emit("error", {"message": "SSH connection failed"})
+                emit("error", {"message": "SSH connection failed. Check credentials and host."})
         except Exception as e:
             logger.error(f"WS SSH connect error: {e}")
             emit("error", {"message": str(e)})
@@ -435,21 +430,18 @@ def create_app():
     def handle_ssh_command(data):
         try:
             connection_id = data.get("connection_id")
-            command = data.get("command")
-            if not connection_id or command is None:
-                emit("error", {"message": "connection_id and command required"})
+            command = data.get("command", "")
+            if not connection_id:
+                emit("error", {"message": "connection_id required"})
                 return
+
             terminal = ssh_manager.get_connection(connection_id)
             if not terminal:
                 emit("error", {"message": "Connection not found or timed out"})
                 return
-            if terminal.send_command(command + "\n"):
-                import time
-                time.sleep(0.2)
-                output = terminal.get_output()
-                emit("ssh_output", {"connection_id": connection_id, "output": output}, to=connection_id)
-            else:
-                emit("error", {"message": "Failed to send command"})
+
+            terminal.send_command(command + "\n")
+            # Output will be streamed via the background thread started on connect
         except Exception as e:
             emit("error", {"message": str(e)})
 
@@ -460,7 +452,10 @@ def create_app():
             if connection_id:
                 ssh_manager.close_connection(connection_id)
                 leave_room(connection_id)
-                emit("ssh_disconnected", {"connection_id": connection_id, "message": "Disconnected"})
+                emit("ssh_disconnected", {
+                    "connection_id": connection_id,
+                    "message": "Disconnected",
+                })
         except Exception as e:
             emit("error", {"message": str(e)})
 
@@ -471,9 +466,56 @@ def create_app():
 # Helpers
 # ------------------------------------------------------------------
 
+def _extract_ssh_params(data):
+    """Extract SSH connection parameters from request data."""
+    hostname = data.get("hostname")
+    username = data.get("username")
+    port = data.get("port", 22)
+    password = data.get("password")
+    key_id = data.get("key_id")
+    ssh_key = data.get("ssh_key")
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        port = 22
+    return hostname, username, port, password, key_id, ssh_key
+
+
+def _resolve_stored_ssh(store, key_id):
+    """
+    Parse a stored SSH secret into (username, hostname, port).
+    Returns error string on failure.
+    """
+    secret = store.get_secret_by_id(key_id)
+    if not secret:
+        return "error:SSH server not found"
+
+    ssh_data = secret.get("secret", "")
+    parts = ssh_data.split("|")
+    user_ip = parts[0]
+
+    if ":" not in user_ip:
+        return "error:Invalid SSH secret format — expected user:host"
+
+    username, hostname = user_ip.split(":", 1)
+    port = 22
+
+    for part in parts[1:]:
+        if part.startswith("port:"):
+            try:
+                port = int(part[5:])
+            except ValueError:
+                pass
+
+    if not username or not hostname:
+        return "error:SSH secret is missing username or hostname"
+
+    return username, hostname, port
+
+
 def _resolve_key(store, ssh_key_text, key_id):
     """Save SSH key to a temp file and return path, or None."""
-    import tempfile, os
+    import tempfile
     if ssh_key_text:
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as f:
             f.write(ssh_key_text)
@@ -484,6 +526,7 @@ def _resolve_key(store, ssh_key_text, key_id):
         secret = store.get_secret_by_id(key_id)
         if secret:
             ssh_data = secret.get("secret", "")
+            # Only treat as raw key if it doesn't look like a user:host string
             if not ("|" in ssh_data and ":" in ssh_data.split("|")[0]):
                 with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as f:
                     f.write(ssh_data)
@@ -491,3 +534,35 @@ def _resolve_key(store, ssh_key_text, key_id):
                 os.chmod(path, 0o600)
                 return path
     return None
+
+
+def _start_output_streaming(socketio, ssh_manager, connection_id):
+    """
+    Background thread that continuously reads SSH output and pushes it
+    to the WebSocket room. This replaces the fire-and-forget polling in
+    the old handle_ssh_command handler.
+    """
+    import threading
+    import time
+
+    def stream():
+        while True:
+            terminal = ssh_manager.get_connection(connection_id)
+            if not terminal or not terminal.connected:
+                socketio.emit(
+                    "ssh_disconnected",
+                    {"connection_id": connection_id, "message": "Connection closed"},
+                    to=connection_id,
+                )
+                break
+            output = terminal.get_output()
+            if output:
+                socketio.emit(
+                    "ssh_output",
+                    {"connection_id": connection_id, "output": output},
+                    to=connection_id,
+                )
+            time.sleep(0.1)
+
+    t = threading.Thread(target=stream, daemon=True)
+    t.start()

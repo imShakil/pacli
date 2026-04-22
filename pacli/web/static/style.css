@@ -72,6 +72,13 @@ textarea {
     font-size: .85rem;
 }
 
+/* Token hidden mode */
+textarea.token-hidden {
+    -webkit-text-security: disc;
+    font-family: var(--font-ui);
+    letter-spacing: .1em;
+}
+
 label {
     display: block;
     font-size: .78rem;
@@ -89,6 +96,20 @@ label {
     margin-bottom: 1.1rem;
 }
 
+.required-tag {
+    color: var(--red);
+    font-size: .7rem;
+}
+
+.optional-tag {
+    color: var(--muted);
+    font-size: .68rem;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ---- Buttons ---- */
 .btn {
     font-family: var(--font-ui);
     font-size: .9rem;
@@ -149,6 +170,7 @@ label {
     width: 100%;
 }
 
+/* ---- Alerts ---- */
 .alert {
     font-size: .875rem;
     padding: .7rem 1rem;
@@ -175,6 +197,7 @@ label {
     color: #93bbff;
 }
 
+/* ---- Badges ---- */
 .badge {
     font-size: .68rem;
     font-weight: 700;
@@ -199,7 +222,18 @@ label {
     color: var(--green);
 }
 
-/* Overlay (auth screens) */
+/* ---- kbd ---- */
+.kbd {
+    font-family: var(--font-mono);
+    font-size: .65rem;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    padding: .1rem .35rem;
+    color: var(--muted);
+}
+
+/* ---- Overlay / Auth ---- */
 .overlay {
     position: fixed;
     inset: 0;
@@ -248,7 +282,7 @@ label {
     margin-top: 1.25rem;
 }
 
-/* Main app */
+/* ---- App shell ---- */
 #app {
     display: flex;
     flex-direction: column;
@@ -298,7 +332,7 @@ label {
     overflow: hidden;
 }
 
-/* Sidebar */
+/* ---- Sidebar ---- */
 .sidebar {
     width: 210px;
     flex-shrink: 0;
@@ -318,6 +352,9 @@ label {
     letter-spacing: .09em;
     color: var(--muted);
     margin-bottom: .5rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
 }
 
 .filter-list {
@@ -379,7 +416,25 @@ label {
     padding-left: 2.1rem;
 }
 
-/* Main */
+.sidebar-shortcuts {
+    margin-top: auto;
+}
+
+.shortcut-list {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+}
+
+.shortcut-item {
+    font-size: .73rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+/* ---- Main / Grid ---- */
 .main {
     flex: 1;
     overflow-y: auto;
@@ -425,6 +480,10 @@ label {
     background: var(--accent);
 }
 
+.secret-card:hover .secret-card-actions {
+    opacity: 1;
+}
+
 .secret-card-top {
     display: flex;
     justify-content: space-between;
@@ -447,6 +506,30 @@ label {
     margin-top: .4rem;
 }
 
+.secret-card-actions {
+    display: flex;
+    gap: .3rem;
+    margin-top: .6rem;
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.card-action-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: .25rem .5rem;
+    cursor: pointer;
+    font-size: .85rem;
+    color: var(--muted2);
+    transition: all .15s;
+}
+
+.card-action-btn:hover {
+    background: var(--border2);
+    color: var(--text);
+}
+
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
@@ -465,7 +548,7 @@ label {
     color: var(--muted2);
 }
 
-/* Modals */
+/* ---- Modals ---- */
 .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -512,6 +595,10 @@ label {
     justify-content: space-between;
     padding: 1.2rem 1.5rem;
     border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
 }
 
 .modal-header h3 {
@@ -549,9 +636,147 @@ label {
     display: flex;
     gap: .7rem;
     justify-content: flex-end;
+    align-items: center;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
 }
 
-/* View secret */
+/* ---- Type selector (Add modal) ---- */
+.type-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: .6rem;
+    margin-bottom: .25rem;
+}
+
+.type-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .2rem;
+    padding: .85rem .5rem;
+    background: var(--surface2);
+    border: 2px solid var(--border2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--font-ui);
+    text-align: center;
+}
+
+.type-btn:hover {
+    border-color: var(--accent);
+    background: rgba(91, 141, 238, .06);
+}
+
+.type-btn.active {
+    border-color: var(--accent);
+    background: rgba(91, 141, 238, .12);
+}
+
+.type-icon {
+    font-size: 1.4rem;
+}
+
+.type-name {
+    font-size: .825rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.type-desc {
+    font-size: .68rem;
+    color: var(--muted);
+}
+
+/* ---- Password input with toggle ---- */
+.pw-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.pw-input-wrap input,
+.pw-input-wrap textarea {
+    padding-right: 2.6rem;
+}
+
+.pw-toggle {
+    position: absolute;
+    right: .6rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: .9rem;
+    padding: .2rem;
+    transition: color .15s;
+    flex-shrink: 0;
+}
+
+.pw-toggle.textarea-toggle {
+    top: .6rem;
+    bottom: auto;
+}
+
+.pw-toggle:hover {
+    color: var(--text);
+}
+
+/* ---- Password strength ---- */
+.strength-wrap {
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: .3rem;
+}
+
+.strength-bar {
+    height: 100%;
+    width: 0;
+    border-radius: 2px;
+    transition: width .3s, background .3s;
+}
+
+.strength-label {
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-top: .2rem;
+}
+
+/* ---- SSH add form grid ---- */
+.ssh-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
+}
+
+.ssh-edit-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .6rem 1rem;
+    margin-bottom: 1rem;
+    font-family: var(--font-mono);
+    font-size: .8rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    word-break: break-all;
+}
+
+.preview-label {
+    color: var(--muted);
+    font-size: .72rem;
+    flex-shrink: 0;
+}
+
+/* ---- View modal ---- */
 .view-row {
     display: flex;
     gap: .75rem;
@@ -579,16 +804,15 @@ label {
     word-break: break-all;
 }
 
-/* Secret reveal — copy always available */
 .reveal-area {
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: .65rem .9rem;
+    padding: .8rem 1rem;
+    margin-bottom: .5rem;
+    min-height: 2.8rem;
     display: flex;
     align-items: center;
-    gap: .6rem;
-    margin-bottom: .75rem;
 }
 
 .reveal-text {
@@ -597,7 +821,7 @@ label {
     font-size: .875rem;
     word-break: break-all;
     color: var(--text);
-    min-height: 1.4em;
+    line-height: 1.6;
 }
 
 .reveal-text.masked {
@@ -606,13 +830,22 @@ label {
     user-select: none;
 }
 
-.reveal-btns {
-    display: flex;
-    gap: .4rem;
-    flex-shrink: 0;
+.reveal-field-label {
+    font-size: .72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-right: .2rem;
 }
 
-/* Tabs */
+.reveal-btns-row {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+}
+
+/* ---- Tabs ---- */
 .tabs {
     display: flex;
     border-bottom: 1px solid var(--border);
@@ -650,16 +883,103 @@ label {
     display: block;
 }
 
-/* SSH */
+/* ---- SSH Terminal ---- */
+.ssh-status {
+    font-family: var(--font-mono);
+    font-size: .75rem;
+    padding: .2rem .65rem;
+    border-radius: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.ssh-status-connecting {
+    background: rgba(246, 173, 85, .15);
+    color: var(--yellow);
+    border: 1px solid rgba(246, 173, 85, .3);
+}
+
+.ssh-status-connected {
+    background: rgba(62, 207, 142, .15);
+    color: var(--green);
+    border: 1px solid rgba(62, 207, 142, .3);
+}
+
+.ssh-status-disconnected {
+    background: rgba(100, 116, 139, .15);
+    color: var(--muted);
+    border: 1px solid rgba(100, 116, 139, .3);
+}
+
+.ssh-status-error {
+    background: rgba(245, 101, 101, .15);
+    color: var(--red);
+    border: 1px solid rgba(245, 101, 101, .3);
+}
+
 .ssh-terminal {
     background: #090b0f;
     border-radius: 8px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    height: 360px;
+    height: 380px;
     border: 1px solid var(--border);
     font-family: var(--font-mono);
+}
+
+.ssh-terminal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .8rem;
+    background: #0c0e13;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.terminal-dot.red {
+    background: #f56565;
+}
+
+.terminal-dot.yellow {
+    background: #f6ad55;
+}
+
+.terminal-dot.green {
+    background: #3ecf8e;
+}
+
+.terminal-title {
+    font-size: .72rem;
+    color: var(--muted);
+    flex: 1;
+    text-align: center;
+}
+
+.terminal-clear-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    cursor: pointer;
+    padding: .15rem .4rem;
+    border-radius: 4px;
+    transition: all .15s;
+}
+
+.terminal-clear-btn:hover {
+    background: var(--border2);
+    color: var(--text);
 }
 
 .ssh-output {
@@ -677,6 +997,7 @@ label {
     display: flex;
     border-top: 1px solid var(--border);
     background: #0c0e13;
+    align-items: center;
 }
 
 .ssh-prompt {
@@ -695,6 +1016,7 @@ label {
     font-size: .82rem;
     outline: none;
     padding: .6rem 0;
+    border-radius: 0;
 }
 
 .ssh-cmd:disabled {
@@ -713,7 +1035,94 @@ label {
     gap: .75rem;
 }
 
-/* Backup */
+/* ---- .env Import ---- */
+.env-preview {
+    margin-top: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.env-preview-title {
+    font-size: .82rem;
+    color: var(--muted2);
+    margin-bottom: .5rem;
+}
+
+.env-select-all {
+    font-size: .82rem;
+    margin-bottom: .5rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    color: var(--muted2);
+}
+
+.env-select-all label {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .82rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    cursor: pointer;
+}
+
+.env-select-all input {
+    width: auto;
+    margin: 0;
+}
+
+.env-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    margin-bottom: .4rem;
+}
+
+.env-item label {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .875rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.env-item input[type=checkbox] {
+    width: auto;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.env-key {
+    font-family: var(--font-mono);
+    font-size: .8rem;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.env-val-preview {
+    font-size: .78rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.env-no-items {
+    font-size: .85rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 1rem;
+}
+
+/* ---- Backup ---- */
 .backup-box {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -757,6 +1166,51 @@ label {
     margin: 0;
 }
 
+/* ---- Help text & inline code ---- */
+.help-text {
+    font-size: .82rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.inline-code {
+    font-family: var(--font-mono);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: .1rem .4rem;
+    font-size: .8em;
+}
+
+/* ---- Toast ---- */
+.toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 24px;
+    padding: .6rem 1.4rem;
+    font-size: .875rem;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    z-index: 9999;
+    transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.toast-show {
+    transform: translateX(-50%) translateY(0);
+}
+
+.toast-error {
+    border-color: rgba(245, 101, 101, .4);
+    color: #fc8181;
+}
+
+/* ---- Scrollbars ---- */
 ::-webkit-scrollbar {
     width: 5px;
     height: 5px;
@@ -771,6 +1225,7 @@ label {
     border-radius: 3px;
 }
 
+/* ---- Responsive ---- */
 @media (max-width: 640px) {
     .sidebar {
         display: none;
@@ -782,5 +1237,21 @@ label {
 
     .topbar-actions .btn-ghost {
         display: none;
+    }
+
+    .type-selector {
+        grid-template-columns: 1fr;
+    }
+
+    .ssh-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ssh-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .reveal-btns-row {
+        flex-wrap: wrap;
     }
 }

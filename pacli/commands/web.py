@@ -50,6 +50,39 @@ def _is_pid_running(pid):
         return False
 
 
+def _get_pid_from_file():
+    if not os.path.exists(WEB_PID_PATH):
+        return None
+    with open(WEB_PID_PATH, "r") as f:
+        pid_text = f.read().strip()
+    if not pid_text.isdigit():
+        return None
+    pid = int(pid_text)
+    if pid <= 1:
+        return None
+    return pid
+
+
+def _is_pid_owned_by_current_user(pid):
+    proc_path = f"/proc/{pid}"
+    if not os.path.exists(proc_path):
+        return False
+    try:
+        return os.stat(proc_path).st_uid == os.getuid()
+    except OSError:
+        return False
+
+
+def _is_expected_web_process(pid):
+    cmdline_path = f"/proc/{pid}/cmdline"
+    try:
+        with open(cmdline_path, "rb") as f:
+            cmdline = f.read().decode("utf-8", errors="ignore")
+    except OSError:
+        return False
+    return "pacli.commands.web" in cmdline and "_run_server" in cmdline
+
+
 def _load_state():
     if not os.path.exists(WEB_STATE_PATH):
         return {}
@@ -199,17 +232,23 @@ def stop():
         return
 
     try:
-        with open(WEB_PID_PATH, "r") as f:
-            pid_text = f.read().strip()
-        if not pid_text.isdigit():
+        pid = _get_pid_from_file()
+        if pid is None:
             _clear_state_files()
             click.echo("Web UI pid file was invalid and has been cleaned up.")
             return
 
-        pid = int(pid_text)
         if not _is_pid_running(pid):
             _clear_state_files()
             click.echo("Web UI was not running; cleaned up stale pid/state files.")
+            return
+
+        if not _is_pid_owned_by_current_user(pid):
+            click.echo("Refusing to stop process: pid is not owned by current user.")
+            return
+
+        if not _is_expected_web_process(pid):
+            click.echo("Refusing to stop process: pid does not look like pacli Web UI.")
             return
 
         os.kill(pid, signal.SIGTERM)
@@ -229,13 +268,11 @@ def status():
         return
 
     try:
-        with open(WEB_PID_PATH, "r") as f:
-            pid_text = f.read().strip()
-        if not pid_text.isdigit():
+        pid = _get_pid_from_file()
+        if pid is None:
             click.echo("Web UI status unknown (invalid pid file).")
             return
 
-        pid = int(pid_text)
         state = _load_state()
         host = state.get("host", "127.0.0.1")
         port = state.get("port", WEB_DEFAULT_PORT)

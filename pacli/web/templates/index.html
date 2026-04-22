@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>pacli — Secrets Manager</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+</style>
 </head>
 <body>
 
@@ -53,6 +54,7 @@
     <div class="topbar-brand"><span>🔐</span> pacli</div>
     <div class="topbar-actions">
       <span class="topbar-count" id="total-count"></span>
+      <button class="btn btn-ghost btn-sm" onclick="openEnvModal()" title="Import .env file">📥 .env</button>
       <button class="btn btn-ghost btn-sm" onclick="openBackupModal()">☁️ Backup</button>
       <button class="btn btn-ghost btn-sm" onclick="openSSHModal()">⌨️ SSH</button>
       <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Add Secret</button>
@@ -72,10 +74,17 @@
         </div>
       </div>
       <div>
-        <div class="sidebar-section-title">Search</div>
+        <div class="sidebar-section-title">Search <kbd class="kbd">⌘K</kbd></div>
         <div class="search-wrap">
           <span class="search-icon">🔍</span>
           <input type="text" id="search-input" placeholder="Search labels…" oninput="doSearch(this.value)" />
+        </div>
+      </div>
+      <div class="sidebar-shortcuts">
+        <div class="sidebar-section-title">Shortcuts</div>
+        <div class="shortcut-list">
+          <span class="shortcut-item"><kbd class="kbd">⌘N</kbd> Add secret</span>
+          <span class="shortcut-item"><kbd class="kbd">Esc</kbd> Close modal</span>
         </div>
       </div>
     </aside>
@@ -85,7 +94,7 @@
   </div>
 </div>
 
-<!-- Add/Edit modal -->
+<!-- Add/Edit modal — TYPE-AWARE -->
 <div id="edit-backdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEditModal()">
   <div class="modal">
     <div class="modal-header">
@@ -93,21 +102,45 @@
       <button class="modal-close" onclick="closeEditModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="field"><label>Label</label>
-        <input type="text" id="edit-label" placeholder="e.g. github, stripe-key" /></div>
-      <div class="field"><label>Type</label>
-        <select id="edit-type">
-          <option value="password">🔑 Password</option>
-          <option value="token">🪙 Token</option>
-          <option value="ssh">🖥️ SSH</option>
-        </select></div>
-      <div class="field"><label>Secret value</label>
-        <textarea id="edit-value" rows="4" placeholder="Paste your secret here"></textarea></div>
+      <div class="field">
+        <label>Label <span class="required-tag">*</span></label>
+        <input type="text" id="edit-label" placeholder="e.g. github, stripe-key, prod-server" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <div class="type-selector" id="type-selector">
+          <button type="button" class="type-btn active" data-type="password" onclick="selectType('password', this)">
+            <span class="type-icon">🔑</span>
+            <span class="type-name">Password</span>
+            <span class="type-desc">username + password</span>
+          </button>
+          <button type="button" class="type-btn" data-type="token" onclick="selectType('token', this)">
+            <span class="type-icon">🪙</span>
+            <span class="type-name">Token</span>
+            <span class="type-desc">API key / token</span>
+          </button>
+          <button type="button" class="type-btn" data-type="ssh" onclick="selectType('ssh', this)">
+            <span class="type-icon">🖥️</span>
+            <span class="type-name">SSH</span>
+            <span class="type-desc">server connection</span>
+          </button>
+        </div>
+        <!-- Hidden select kept for backward compat with saveSecret() -->
+        <select id="edit-type" class="hidden" onchange="onEditTypeChange()">
+          <option value="password">Password</option>
+          <option value="token">Token</option>
+          <option value="ssh">SSH</option>
+        </select>
+      </div>
+
+      <!-- Dynamic fields rendered by JS -->
+      <div id="edit-fields-container"></div>
+
       <div id="edit-error" class="alert alert-error hidden"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveSecret()">Save</button>
+      <button class="btn btn-primary" onclick="saveSecret()">Save Secret</button>
     </div>
   </div>
 </div>
@@ -128,16 +161,19 @@
         <div class="view-row-label">Type</div>
         <div class="view-row-value" id="view-type-val"></div>
       </div>
+
       <label>Secret</label>
       <div class="reveal-area">
         <div class="reveal-text masked" id="reveal-text">••••••••••••••••</div>
-        <div class="reveal-btns">
-          <!-- Copy is ALWAYS available — fetches on demand if needed -->
-          <button class="btn btn-ghost btn-sm" id="reveal-toggle-btn" onclick="toggleReveal()">👁 Show</button>
-          <button class="btn btn-ghost btn-sm" onclick="copySecret()">📋 Copy</button>
-        </div>
       </div>
-      <div class="view-row">
+      <div class="reveal-btns-row">
+        <button class="btn btn-ghost btn-sm" id="reveal-toggle-btn" onclick="toggleReveal()">👁 Show</button>
+        <button class="btn btn-ghost btn-sm" onclick="copySecret()" title="Copy password / token">📋 Copy</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyUsername()" id="copy-username-btn" title="Copy username">👤 Username</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyFullSecret()" title="Copy full value">📄 Full</button>
+      </div>
+
+      <div class="view-row" style="margin-top:.75rem">
         <div class="view-row-label">Created</div>
         <div class="view-row-value" id="view-created-val"></div>
       </div>
@@ -149,18 +185,22 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" onclick="deleteSecret()">🗑 Delete</button>
+      <button id="view-ssh-btn" class="btn btn-ghost btn-sm" onclick="openSSHFromView()" style="display:none">⌨️ Connect</button>
       <button class="btn btn-ghost" onclick="closeViewModal()">Close</button>
       <button class="btn btn-primary" onclick="openEditFromView()">✏️ Edit</button>
     </div>
   </div>
 </div>
 
-<!-- SSH modal -->
+<!-- SSH Terminal modal — improved -->
 <div id="ssh-backdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeSSHModal()">
   <div class="modal modal-lg">
     <div class="modal-header">
       <h3>⌨️ SSH Terminal</h3>
-      <button class="modal-close" onclick="closeSSHModal()">✕</button>
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <span id="ssh-status" class="ssh-status" style="display:none"></span>
+        <button class="modal-close" onclick="closeSSHModal()">✕</button>
+      </div>
     </div>
     <div class="modal-body">
       <div id="ssh-connect-area">
@@ -168,10 +208,11 @@
           <button class="tab-btn active" onclick="switchTab('ssh','manual',this)">Manual</button>
           <button class="tab-btn" onclick="switchTab('ssh','stored',this)">Stored Servers</button>
         </div>
+
         <div id="ssh-panel-manual" class="tab-panel active">
           <div class="ssh-grid">
             <div class="field"><label>Hostname / IP</label><input type="text" id="ssh-host" placeholder="192.168.1.1" /></div>
-            <div class="field"><label>Port</label><input type="number" id="ssh-port" value="22" /></div>
+            <div class="field"><label>Port</label><input type="number" id="ssh-port" value="22" min="1" max="65535" /></div>
             <div class="field"><label>Username</label><input type="text" id="ssh-user" placeholder="root" /></div>
             <div class="field"><label>Auth type</label>
               <select id="ssh-auth" onchange="toggleSSHAuth()">
@@ -180,36 +221,85 @@
               </select>
             </div>
           </div>
-          <div id="ssh-pw-field" class="field"><label>Password</label><input type="password" id="ssh-password" /></div>
+          <div id="ssh-pw-field" class="field">
+            <label>Password</label>
+            <div class="pw-input-wrap">
+              <input type="password" id="ssh-password" />
+              <button type="button" class="pw-toggle" onclick="togglePwVisibility('ssh-password', this)">👁</button>
+            </div>
+          </div>
           <div id="ssh-key-fields" class="hidden">
             <div class="field"><label>Select key from secrets</label>
               <select id="ssh-key-select"><option value="">— Choose stored key —</option></select></div>
             <div class="field"><label>Or paste private key</label>
-              <textarea id="ssh-key-paste" rows="5" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></div>
+              <textarea id="ssh-key-paste" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></div>
           </div>
-          <button class="btn btn-primary btn-block" onclick="sshConnect('manual')">Connect</button>
+          <button class="btn btn-primary btn-block" onclick="sshConnect('manual')">Connect →</button>
           <div id="ssh-manual-error" class="alert alert-error hidden"></div>
         </div>
+
         <div id="ssh-panel-stored" class="tab-panel">
-          <p style="font-size:.83rem;color:var(--muted);margin-bottom:1rem">
-            SSH secrets must be stored in format: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--font-mono)">user:host|port:22</code>
+          <p class="help-text">
+            SSH secrets stored as <code class="inline-code">user:host|port:22|key:/path</code>
           </p>
           <div class="field"><label>Select SSH server</label>
             <select id="ssh-stored-select"><option value="">— Choose —</option></select></div>
-          <button class="btn btn-primary btn-block" onclick="sshConnect('stored')">Connect</button>
+          <button class="btn btn-primary btn-block" onclick="sshConnect('stored')">Connect →</button>
           <div id="ssh-stored-error" class="alert alert-error hidden"></div>
         </div>
       </div>
+
+      <!-- Terminal -->
       <div id="ssh-terminal-wrap" class="hidden">
         <div class="ssh-terminal">
+          <div class="ssh-terminal-toolbar">
+            <span class="terminal-dot red"></span>
+            <span class="terminal-dot yellow"></span>
+            <span class="terminal-dot green"></span>
+            <span class="terminal-title" id="ssh-terminal-title">SSH Session</span>
+            <button class="terminal-clear-btn" onclick="clearSSHOutput()" title="Clear output">⌫ Clear</button>
+          </div>
           <div id="ssh-output" class="ssh-output"></div>
           <div class="ssh-input-row">
             <span class="ssh-prompt">$&nbsp;</span>
-            <input type="text" class="ssh-cmd" id="ssh-cmd" placeholder="type command and press Enter…" disabled onkeydown="sshKey(event)" />
+            <input type="text" class="ssh-cmd" id="ssh-cmd"
+              placeholder="type command and press Enter…"
+              disabled onkeydown="sshKey(event)"
+              autocomplete="off" spellcheck="false" />
             <button class="btn btn-danger btn-sm ssh-disconnect-btn" onclick="sshDisconnect()">Disconnect</button>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- .env Import modal -->
+<div id="env-backdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEnvModal()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>📥 Import from .env File</h3>
+      <button class="modal-close" onclick="closeEnvModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="help-text" style="margin-bottom:1rem">
+        Each <code class="inline-code">KEY=VALUE</code> line will be imported as a <strong>token</strong> secret. Comments (<code class="inline-code">#</code>) are ignored.
+      </p>
+      <div class="upload-zone" id="env-upload-zone"
+           onclick="document.getElementById('env-file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="event.preventDefault();this.classList.remove('drag-over');S.envFile=event.dataTransfer.files[0];const r=new FileReader();r.onload=e=>previewEnvFile(e.target.result);r.readAsText(S.envFile)">
+        <p>📂 Click or drag &amp; drop a <code class="inline-code">.env</code> file</p>
+      </div>
+      <input type="file" id="env-file-input" accept=".env,text/plain" class="hidden" onchange="onEnvFileSelected(this)" />
+
+      <div id="env-preview" class="env-preview"></div>
+      <div id="env-msg" class="alert hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeEnvModal()">Cancel</button>
+      <button id="env-import-btn" class="btn btn-primary hidden" onclick="doEnvImport()">Import Selected</button>
     </div>
   </div>
 </div>
@@ -229,7 +319,7 @@
       <div id="backup-panel-export" class="tab-panel active">
         <div class="backup-box">
           <h4>Export encrypted backup</h4>
-          <p>Your secrets are encrypted with the backup password before download. Safe to store on Dropbox, Google Drive, iCloud, etc. Use a backup password you can remember.</p>
+          <p>Your secrets are encrypted with the backup password before download. Safe to store on Dropbox, Google Drive, iCloud, etc.</p>
           <div class="field"><label>Backup password</label>
             <input type="password" id="backup-export-pw" placeholder="Choose a backup password" /></div>
           <div class="field"><label>Confirm backup password</label>
@@ -241,7 +331,7 @@
       <div id="backup-panel-import" class="tab-panel">
         <div class="backup-box">
           <h4>Import from backup file</h4>
-          <p>Restore secrets from a <code style="font-family:var(--font-mono)">.pacli</code> backup. Existing secrets are skipped by default — enable overwrite to replace them.</p>
+          <p>Restore secrets from a <code class="inline-code">.pacli</code> backup. Existing secrets are skipped by default.</p>
           <div class="upload-zone" id="upload-zone"
                onclick="document.getElementById('backup-file-input').click()"
                ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -266,5 +356,16 @@
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+<script>
+// Type selector UI helper (bridges visual buttons to hidden select)
+function selectType(type, btn) {
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const select = document.getElementById('edit-type');
+  select.value = type;
+  renderSecretTypeForm(type);
+}
+</script>
 </body>
 </html>
