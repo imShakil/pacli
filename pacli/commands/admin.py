@@ -60,6 +60,7 @@ def change_master_key():
     store.update_master_password(new_password)
     # Re-derive fernet with new password so re-encryption works
     from ..store import get_salt
+
     salt = get_salt()
     store.fernet = store._derive_fernet(new_password, salt)
 

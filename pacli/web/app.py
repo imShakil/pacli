@@ -34,6 +34,7 @@ def create_app():
                 session.clear()
                 return jsonify({"error": "Session expired. Please sign in again."}), 401
             return f(*args, **kwargs)
+
         return decorated
 
     # ------------------------------------------------------------------
@@ -87,10 +88,12 @@ def create_app():
         authenticated = "authenticated" in session and store.fernet is not None
         if not authenticated and "authenticated" in session and store.fernet is None:
             session.clear()
-        return jsonify({
-            "authenticated": authenticated,
-            "configured": store.is_master_set(),
-        })
+        return jsonify(
+            {
+                "authenticated": authenticated,
+                "configured": store.is_master_set(),
+            }
+        )
 
     @app.route("/api/auth/login", methods=["POST"])
     def login():
@@ -121,20 +124,22 @@ def create_app():
     def get_secrets():
         try:
             secrets = store.list_secrets()
-            return jsonify({
-                "secrets": [
-                    {
-                        "id": s[0],
-                        "label": s[1],
-                        "type": s[2],
-                        "creation_time": s[3],
-                        "update_time": s[4],
-                        "creation_date": datetime.fromtimestamp(s[3]).strftime("%Y-%m-%d %H:%M"),
-                        "update_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M"),
-                    }
-                    for s in secrets
-                ]
-            })
+            return jsonify(
+                {
+                    "secrets": [
+                        {
+                            "id": s[0],
+                            "label": s[1],
+                            "type": s[2],
+                            "creation_time": s[3],
+                            "update_time": s[4],
+                            "creation_date": datetime.fromtimestamp(s[3]).strftime("%Y-%m-%d %H:%M"),
+                            "update_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M"),
+                        }
+                        for s in secrets
+                    ]
+                }
+            )
         except Exception as e:
             logger.error(f"Error getting secrets: {e}")
             return jsonify({"error": str(e)}), 500
@@ -145,13 +150,15 @@ def create_app():
         try:
             secret = store.get_secret_by_id(secret_id)
             if secret:
-                return jsonify({
-                    "id": secret.get("id"),
-                    "label": secret.get("label"),
-                    "type": secret.get("type"),
-                    "creation_time": secret.get("creation_time"),
-                    "update_time": secret.get("update_time"),
-                })
+                return jsonify(
+                    {
+                        "id": secret.get("id"),
+                        "label": secret.get("label"),
+                        "type": secret.get("type"),
+                        "creation_time": secret.get("creation_time"),
+                        "update_time": secret.get("update_time"),
+                    }
+                )
             return jsonify({"error": "Secret not found"}), 404
         except Exception as e:
             logger.error(f"Error getting secret {secret_id}: {e}")
@@ -163,11 +170,13 @@ def create_app():
         try:
             secret = store.get_secret_by_id(secret_id)
             if secret:
-                return jsonify({
-                    "secret": secret.get("secret"),
-                    "type": secret.get("type"),
-                    "label": secret.get("label"),
-                })
+                return jsonify(
+                    {
+                        "secret": secret.get("secret"),
+                        "type": secret.get("type"),
+                        "label": secret.get("label"),
+                    }
+                )
             return jsonify({"error": "Secret not found"}), 404
         except Exception as e:
             logger.error(f"Error revealing secret {secret_id}: {e}")
@@ -255,6 +264,7 @@ def create_app():
                 return jsonify({"error": "Backup password must be at least 6 characters"}), 400
             blob = store.export_encrypted_backup(backup_password)
             from flask import Response
+
             return Response(
                 blob,
                 mimetype="application/octet-stream",
@@ -295,7 +305,12 @@ def create_app():
 
             if key_id and not hostname:
                 result = _resolve_stored_ssh(store, key_id)
-                if isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], str) and result[0].startswith("error:"):
+                if (
+                    isinstance(result, tuple)
+                    and len(result) == 2
+                    and isinstance(result[0], str)
+                    and result[0].startswith("error:")
+                ):
                     return jsonify({"error": result[0][6:]}), 400
                 username, hostname, port = result
 
@@ -305,15 +320,18 @@ def create_app():
             key_filename = _resolve_key(store, ssh_key, None)
 
             connection_id = str(uuid.uuid4())
-            success = ssh_manager.create_connection(
-                connection_id, hostname, username, port, password, key_filename
-            )
+            success = ssh_manager.create_connection(connection_id, hostname, username, port, password, key_filename)
             if success:
-                return jsonify({
-                    "success": True,
-                    "connection_id": connection_id,
-                    "message": f"Connected to {username}@{hostname}",
-                }), 201
+                return (
+                    jsonify(
+                        {
+                            "success": True,
+                            "connection_id": connection_id,
+                            "message": f"Connected to {username}@{hostname}",
+                        }
+                    ),
+                    201,
+                )
             return jsonify({"error": "SSH connection failed. Check credentials and host."}), 400
         except Exception as e:
             logger.error(f"SSH connect error: {e}")
@@ -344,6 +362,7 @@ def create_app():
 
             if terminal.send_command(command + "\n"):
                 import time
+
                 # Wait a bit longer for output to arrive
                 time.sleep(0.4)
                 output = terminal.get_output()
@@ -361,11 +380,13 @@ def create_app():
             if not terminal:
                 return jsonify({"output": "", "disconnected": True})
             output = terminal.get_output()
-            return jsonify({
-                "output": output,
-                "connected": terminal.connected,
-                "disconnected": not terminal.connected,
-            })
+            return jsonify(
+                {
+                    "output": output,
+                    "connected": terminal.connected,
+                    "disconnected": not terminal.connected,
+                }
+            )
         except Exception as e:
             return jsonify({"output": "", "disconnected": True, "error": str(e)})
 
@@ -414,10 +435,13 @@ def create_app():
 
             if ssh_manager.create_connection(connection_id, hostname, username, port, password, key_filename):
                 join_room(connection_id)
-                emit("ssh_connected", {
-                    "connection_id": connection_id,
-                    "message": f"Connected to {username}@{hostname}:{port}",
-                })
+                emit(
+                    "ssh_connected",
+                    {
+                        "connection_id": connection_id,
+                        "message": f"Connected to {username}@{hostname}:{port}",
+                    },
+                )
                 # Start streaming output to client
                 _start_output_streaming(socketio, ssh_manager, connection_id)
             else:
@@ -452,10 +476,13 @@ def create_app():
             if connection_id:
                 ssh_manager.close_connection(connection_id)
                 leave_room(connection_id)
-                emit("ssh_disconnected", {
-                    "connection_id": connection_id,
-                    "message": "Disconnected",
-                })
+                emit(
+                    "ssh_disconnected",
+                    {
+                        "connection_id": connection_id,
+                        "message": "Disconnected",
+                    },
+                )
         except Exception as e:
             emit("error", {"message": str(e)})
 
@@ -465,6 +492,7 @@ def create_app():
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _extract_ssh_params(data):
     """Extract SSH connection parameters from request data."""
@@ -516,6 +544,7 @@ def _resolve_stored_ssh(store, key_id):
 def _resolve_key(store, ssh_key_text, key_id):
     """Save SSH key to a temp file and return path, or None."""
     import tempfile
+
     if ssh_key_text:
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as f:
             f.write(ssh_key_text)

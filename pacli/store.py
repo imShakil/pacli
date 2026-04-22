@@ -325,9 +325,7 @@ class SecretStore:
 
         for rec in records:
             try:
-                existing = self.conn.execute(
-                    "SELECT id FROM secrets WHERE id = ?", (rec["id"],)
-                ).fetchone()
+                existing = self.conn.execute("SELECT id FROM secrets WHERE id = ?", (rec["id"],)).fetchone()
                 encrypted = self.fernet.encrypt(rec["secret"].encode()).decode()
 
                 if existing:
@@ -337,15 +335,13 @@ class SecretStore:
                     self.conn.execute(
                         "UPDATE secrets SET label=?, value_encrypted=?, type=?, "
                         "creation_time=?, update_time=? WHERE id=?",
-                        (rec["label"], encrypted, rec["type"],
-                         rec["creation_time"], rec["update_time"], rec["id"]),
+                        (rec["label"], encrypted, rec["type"], rec["creation_time"], rec["update_time"], rec["id"]),
                     )
                 else:
                     self.conn.execute(
                         "INSERT INTO secrets (id, label, value_encrypted, type, creation_time, update_time) "
                         "VALUES (?, ?, ?, ?, ?, ?)",
-                        (rec["id"], rec["label"], encrypted, rec["type"],
-                         rec["creation_time"], rec["update_time"]),
+                        (rec["id"], rec["label"], encrypted, rec["type"], rec["creation_time"], rec["update_time"]),
                     )
                 stats["imported"] += 1
             except Exception as e:

@@ -18,7 +18,8 @@ def backup():
 
 @backup.command("export")
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     default=DEFAULT_BACKUP_NAME,
     show_default=True,
     help="Output file path (e.g. ~/Dropbox/pacli_backup.pacli)",
@@ -64,12 +65,16 @@ def backup_export(output):
 
 @backup.command("import")
 @click.option(
-    "--input", "-i", "input_path",
+    "--input",
+    "-i",
+    "input_path",
     required=True,
     help="Path to the .pacli backup file",
 )
 @click.option(
-    "--overwrite", is_flag=True, default=False,
+    "--overwrite",
+    is_flag=True,
+    default=False,
     help="Overwrite secrets that already exist (default: skip duplicates)",
 )
 @master_password_required
@@ -93,8 +98,10 @@ def backup_import(input_path, overwrite):
         with open(input_path, "rb") as f:
             blob = f.read()
         stats = store.import_encrypted_backup(blob, pw, merge=not overwrite)
-        click.echo(f"✅ Import complete: {stats['imported']} imported, "
-                   f"{stats['skipped']} skipped, {stats['errors']} errors.")
+        click.echo(
+            f"✅ Import complete: {stats['imported']} imported, "
+            f"{stats['skipped']} skipped, {stats['errors']} errors."
+        )
         logger.info(f"Backup imported from {input_path}: {stats}")
     except ValueError as e:
         click.echo(f"❌ {e}")

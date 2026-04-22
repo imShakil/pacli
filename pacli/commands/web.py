@@ -3,7 +3,7 @@ import webbrowser
 import os
 import json
 import signal
-import subprocess
+import subprocess  # nosec B404
 import sys
 from ..web.app import create_app
 from ..log import get_logger
@@ -195,10 +195,10 @@ def start(host, port, no_browser):
         os.makedirs(WEB_STATE_DIR, exist_ok=True)
         log_file = WEB_LOG_PATH
         runner = (
-            "from pacli.commands.web import _run_server; "
-            f"_run_server({host!r}, {int(port)}, {bool(no_browser)})"
+            "from pacli.commands.web import _run_server; " f"_run_server({host!r}, {int(port)}, {bool(no_browser)})"
         )
         with open(log_file, "a") as lf:
+            # Inputs are local CLI args and this runs under the same user account.
             process = subprocess.Popen(
                 [
                     sys.executable,
@@ -210,7 +210,7 @@ def start(host, port, no_browser):
                 stdin=subprocess.DEVNULL,
                 close_fds=True,
                 start_new_session=True,
-            )
+            )  # nosec B603
 
         if process.poll() is not None:
             raise RuntimeError("Web UI process exited immediately. Check log file for details.")
