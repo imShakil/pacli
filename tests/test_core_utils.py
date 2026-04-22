@@ -119,8 +119,7 @@ Host prod
 Host test-box
   HostName 10.0.0.2
   User root
-""".strip()
-        + "\n",
+""".strip() + "\n",
         encoding="utf-8",
     )
 
