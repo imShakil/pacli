@@ -52,7 +52,7 @@ function applyTheme(theme) {
   const normalized = theme === 'light' ? 'light' : 'dark';
   const prevTheme = S.theme;
   S.theme = normalized;
-  document.documentElement.setAttribute('data-theme', normalized);
+  document.documentElement.dataset.theme = normalized;
   localStorage.setItem('pacli.theme', normalized);
   updateThemeToggleButton(prevTheme !== normalized);
 }
