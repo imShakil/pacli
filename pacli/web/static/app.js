@@ -63,34 +63,46 @@ function toggleTheme() {
 
 function updateThemeToggleButton(animateIcon = false) {
   const btn = document.getElementById('theme-toggle-btn');
-  const icon = document.getElementById('theme-icon');
-  const label = document.getElementById('theme-label');
   if (!btn) return;
-
-  const setThemeText = () => {
-    if (S.theme === 'dark') {
-      if (icon) icon.textContent = '🌙';
-      if (label) label.textContent = 'Dark';
-      btn.setAttribute('aria-label', 'Switch to light theme');
-      btn.title = 'Switch to light theme';
-    } else {
-      if (icon) icon.textContent = '☀️';
-      if (label) label.textContent = 'Light';
-      btn.setAttribute('aria-label', 'Switch to dark theme');
-      btn.title = 'Switch to dark theme';
-    }
-  };
-
-  if (animateIcon && icon) {
-    icon.classList.add('icon-swapping');
-    setTimeout(() => {
-      setThemeText();
-      icon.classList.remove('icon-swapping');
-    }, 120);
-    return;
+  if (S.theme === 'dark') {
+    btn.setAttribute('aria-label', 'Switch to light theme');
+    btn.title = 'Switch to light theme';
+  } else {
+    btn.setAttribute('aria-label', 'Switch to dark theme');
+    btn.title = 'Switch to dark theme';
   }
+}
 
-  setThemeText();
+// Mobile menu drawer
+function toggleMobileMenu() {
+  const drawer = document.getElementById('mobile-drawer');
+  const overlay = document.getElementById('mobile-drawer-overlay');
+  if (!drawer) return;
+  const isHidden = drawer.classList.contains('hidden');
+  drawer.classList.toggle('hidden', !isHidden);
+  overlay.classList.toggle('hidden', !isHidden);
+  document.body.style.overflow = isHidden ? 'hidden' : '';
+}
+
+function closeMobileMenu() {
+  const drawer = document.getElementById('mobile-drawer');
+  const overlay = document.getElementById('mobile-drawer-overlay');
+  if (!drawer) return;
+  drawer.classList.add('hidden');
+  overlay.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+// Mobile sidebar/filter sheet
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+  sidebar.classList.toggle('mobile-open');
+}
+
+function closeMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) sidebar.classList.remove('mobile-open');
 }
 
 function handleGlobalKeydown(e) {
@@ -157,7 +169,12 @@ async function doLogout() {
   document.getElementById('login-pw').value = '';
 }
 
-function showApp() { show('app'); }
+function showApp() {
+  show('app');
+  // Show the mobile filter FAB (only visible on mobile via CSS)
+  const fab = document.getElementById('mobile-sidebar-btn');
+  if (fab) fab.classList.remove('hidden');
+}
 
 // ------------------------------------------------------------------
 // Secrets

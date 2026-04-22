@@ -244,19 +244,119 @@ label {
     font-size: .8rem;
 }
 
-#theme-toggle-btn {
-    min-width: 6.6rem;
+/* ============================================================
+   Theme Pill Toggle
+   Light mode : white track · thumb LEFT  · sun on thumb · moon on right
+   Dark  mode : dark track  · thumb RIGHT · moon on thumb · sun on left
+   Thumb fills almost the full track height, accent-colored circle
+   ============================================================ */
+.theme-toggle-pill {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: transform .15s;
 }
 
-.theme-icon {
-    display: inline-block;
-    transition: transform .28s cubic-bezier(.22, 1, .36, 1), opacity .22s ease;
-    will-change: transform, opacity;
+.theme-toggle-pill:active {
+    transform: scale(.94);
 }
 
-.theme-icon.icon-swapping {
-    transform: rotate(120deg) scale(.75);
-    opacity: .2;
+/* ── Track ── */
+.theme-pill-track {
+    position: relative;
+    width: 80px;
+    height: 42px;
+    border-radius: 999px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    box-shadow: 0 4px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
+    transition: background .3s ease, border-color .3s ease;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+:root[data-theme='light'] .theme-pill-track {
+    background: #f0f0f0;
+    border-color: rgba(0,0,0,.1);
+    box-shadow: 0 4px 14px rgba(0,0,0,.15), inset 0 1px 2px rgba(0,0,0,.06);
+}
+
+/* ── Thumb — large circle, 4px gap all around ── */
+.theme-pill-thumb {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* dark mode: thumb on RIGHT */
+    transform: translateX(38px);
+    transition: transform .35s cubic-bezier(.34,1.5,.64,1);
+    box-shadow: 0 3px 12px var(--accent-glow);
+    z-index: 2;
+    will-change: transform;
+}
+
+:root[data-theme='light'] .theme-pill-thumb {
+    /* light mode: thumb on LEFT */
+    transform: translateX(0px);
+    background: var(--accent);
+    box-shadow: 0 3px 12px var(--accent-glow);
+}
+
+/* ── Icon inside thumb ── */
+.pill-icon {
+    width: 16px;
+    height: 16px;
+    color: #fff;
+    flex-shrink: 0;
+    stroke-width: 2;
+}
+
+/* dark mode: moon on thumb */
+.pill-icon-sun  { display: none; }
+.pill-icon-moon { display: block; }
+
+/* light mode: sun on thumb */
+:root[data-theme='light'] .pill-icon-sun  { display: block; }
+:root[data-theme='light'] .pill-icon-moon { display: none; }
+
+/* ── Background icon on opposite side of thumb ── */
+.pill-track-icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 17px;
+    height: 17px;
+    pointer-events: none;
+    z-index: 1;
+    stroke-width: 2;
+}
+
+/* dark mode: faint sun on LEFT */
+.pill-track-sun {
+    display: block;
+    left: 12px;
+    color: var(--muted);
+    opacity: .5;
+}
+.pill-track-moon { display: none; }
+
+/* light mode: faint moon on RIGHT */
+:root[data-theme='light'] .pill-track-sun  { display: none; }
+:root[data-theme='light'] .pill-track-moon {
+    display: block;
+    right: 12px;
+    color: var(--muted);
+    opacity: .45;
 }
 
 .btn-block {
@@ -1396,29 +1496,197 @@ label {
 }
 
 /* ============================================================
+   Mobile menu drawer
+   ============================================================ */
+.topbar-desktop-only { /* shown on desktop, hidden on mobile — handled in media query */ }
+
+.mobile-menu-btn {
+    display: none; /* shown in media query */
+}
+
+.mobile-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    backdrop-filter: blur(4px);
+    z-index: 300;
+    animation: fadeIn .18s ease;
+}
+
+.mobile-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(280px, 85vw);
+    background: var(--surface);
+    background-image: var(--noise);
+    border-left: 1px solid var(--border2);
+    z-index: 301;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 32px rgba(0,0,0,.4);
+    animation: slideInRight .22s cubic-bezier(.34,1.2,.64,1);
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.mobile-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.mobile-drawer-body {
+    display: flex;
+    flex-direction: column;
+    padding: .75rem .9rem;
+    gap: .25rem;
+    flex: 1;
+}
+
+.mobile-drawer-item {
+    justify-content: flex-start !important;
+    width: 100%;
+    font-size: .9rem !important;
+    padding: .65rem 1rem !important;
+}
+
+.mobile-drawer-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: .4rem 0;
+}
+
+/* Filter FAB (floating action button) */
+.mobile-sidebar-fab {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+    color: #021a10;
+    border: none;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(52,211,153,.4);
+    z-index: 50;
+    transition: transform .15s, box-shadow .15s;
+}
+
+.mobile-sidebar-fab:hover {
+    transform: scale(1.07);
+    box-shadow: 0 6px 28px rgba(52,211,153,.55);
+}
+
+.mobile-sidebar-fab:active {
+    transform: scale(.95);
+}
+
+/* Sidebar mobile sheet */
+.sidebar.mobile-open {
+    display: flex !important;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 250;
+    border-right: none;
+    overflow-y: auto;
+    animation: slideUp .22s cubic-bezier(.34,1.2,.64,1);
+    padding-bottom: 5rem;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(30px); opacity: .4; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ============================================================
    Responsive
    ============================================================ */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    /* Topbar */
+    .topbar {
+        padding: .65rem 1rem;
+    }
+
+    .topbar-desktop-only {
+        display: none !important;
+    }
+
+    .mobile-menu-btn {
+        display: inline-flex !important;
+    }
+
+    .topbar-actions {
+        gap: .35rem;
+    }
+
+    .topbar-count {
+        display: none;
+    }
+
+    /* Sidebar hidden on mobile, shown via FAB */
     .sidebar {
         display: none;
     }
 
+    #mobile-sidebar-btn {
+        display: flex !important;
+    }
+
+    /* Grid single column */
     .secrets-grid {
         grid-template-columns: 1fr;
     }
 
-    .topbar-actions .btn-ghost {
-        display: none;
+    .main {
+        padding: 1rem;
     }
 
-    #theme-toggle-btn {
-        display: inline-flex !important;
+    /* Auth card full width */
+    .auth-card {
+        padding: 1.75rem 1.25rem;
+        border-radius: 14px;
     }
 
+    /* Modals full-screen on mobile */
+    .modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .modal {
+        border-radius: 18px 18px 0 0;
+        max-height: 92vh;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .modal-lg {
+        max-width: 100%;
+    }
+
+    /* Type selector */
     .type-selector {
         grid-template-columns: 1fr;
     }
 
+    /* SSH form */
     .ssh-form-grid {
         grid-template-columns: 1fr;
     }
@@ -1427,7 +1695,32 @@ label {
         grid-template-columns: 1fr;
     }
 
+    /* Reveal buttons */
     .reveal-btns-row {
         flex-wrap: wrap;
+    }
+
+    /* SSH terminal height */
+    .ssh-terminal {
+        height: 300px;
+    }
+
+    /* Toast bottom safe area */
+    .toast {
+        bottom: 5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .topbar-brand {
+        font-size: .95rem;
+    }
+
+    .topbar-brand span {
+        font-size: 1.1rem;
+    }
+
+    .secret-card-actions {
+        opacity: 1; /* always visible on touch */
     }
 }
