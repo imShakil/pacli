@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout code"
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.0
         with:
           ref: ${{ github.head_ref }}
 
@@ -45,7 +45,7 @@ jobs:
         run: pytest
 
       - name: "Upload distributions as artifact"
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: release-dists
           path: dist/
@@ -61,15 +61,13 @@ jobs:
           cat release.txt
 
       - name: "Upload release info file"
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: release-info
           path: release.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
             dist/*
