@@ -182,7 +182,7 @@ label {
 .alert-error {
     background: rgba(245, 101, 101, .1);
     border-color: rgba(245, 101, 101, .3);
-    color: #fc8181;
+    color: #1b2430;
 }
 
 .alert-success {
@@ -194,7 +194,7 @@ label {
 .alert-info {
     background: rgba(91, 141, 238, .1);
     border-color: rgba(91, 141, 238, .3);
-    color: #93bbff;
+    color: #1b2430;
 }
 
 /* ---- Badges ---- */
@@ -209,7 +209,7 @@ label {
 
 .badge-password {
     background: rgba(91, 141, 238, .15);
-    color: #93bbff;
+    color: #1b2430;
 }
 
 .badge-token {

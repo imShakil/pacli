@@ -118,7 +118,7 @@ function renderGrid() {
     const el = document.getElementById('cnt-' + k);
     if (el) el.textContent = v;
   });
-  document.getElementById('total-count').textContent = `${counts.all} secret${counts.all !== 1 ? 's' : ''}`;
+  document.getElementById('total-count').textContent = `${counts.all} secret${counts.all === 1 ? '' : 's'}`;
 
   const visible = S.secrets.filter(s => {
     const matchFilter = S.filter === 'all' || s.type === S.filter;
@@ -218,15 +218,50 @@ function openEditFromView() {
 
 function closeEditModal() { hide('edit-backdrop'); }
 
-// Render the right input fields based on secret type
-function renderSecretTypeForm(type, existingValue = '') {
-  const container = document.getElementById('edit-fields-container');
+function parsePasswordSecret(existingValue) {
+  const parts = existingValue ? existingValue.split(':') : [];
+  return {
+    user: parts[0] || '',
+    pass: parts.slice(1).join(':') || '',
+  };
+}
 
-  if (type === 'password') {
-    const parts = existingValue ? existingValue.split(':') : [];
-    const user = parts[0] || '';
-    const pass = parts.slice(1).join(':') || '';
-    container.innerHTML = `
+function parseSSHSecret(existingValue) {
+  let user = '';
+  let host = '';
+  let port = '22';
+  let keyPath = '';
+  let opts = '';
+
+  if (!existingValue) {
+    return { user, host, port, keyPath, opts };
+  }
+
+  const parts = existingValue.split('|');
+  const userHost = parts[0];
+  if (userHost.includes(':')) {
+    [user, host] = userHost.split(':', 2);
+  }
+
+  parts.slice(1).forEach((part) => {
+    if (part.startsWith('key:')) keyPath = part.slice(4);
+    else if (part.startsWith('port:')) port = part.slice(5);
+    else if (part.startsWith('opts:')) opts = part.slice(5);
+  });
+
+  return { user, host, port, keyPath, opts };
+}
+
+function bindSSHPreviewListeners() {
+  ['ssh-edit-user', 'ssh-edit-host', 'ssh-edit-port', 'ssh-edit-key'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateSSHPreview);
+  });
+}
+
+function renderPasswordTypeForm(container, existingValue) {
+  const { user, pass } = parsePasswordSecret(existingValue);
+  container.innerHTML = `
       <div class="field">
         <label>Username</label>
         <input type="text" id="edit-username" placeholder="username" value="${esc(user)}" autocomplete="off" />
@@ -244,8 +279,10 @@ function renderSecretTypeForm(type, existingValue = '') {
         <div id="strength-label" class="strength-label"></div>
       </div>
     `;
-  } else if (type === 'token') {
-    container.innerHTML = `
+}
+
+function renderTokenTypeForm(container, existingValue) {
+  container.innerHTML = `
       <div class="field">
         <label>Token / API Key</label>
         <div class="pw-input-wrap">
@@ -259,20 +296,11 @@ function renderSecretTypeForm(type, existingValue = '') {
         <div id="strength-label" class="strength-label"></div>
       </div>
     `;
-  } else if (type === 'ssh') {
-    // Parse existing SSH value: user:host|key:path|port:22|opts:...
-    let user = '', host = '', port = '22', keyPath = '', opts = '';
-    if (existingValue) {
-      const parts = existingValue.split('|');
-      const userHost = parts[0];
-      if (userHost.includes(':')) { [user, host] = userHost.split(':', 2); }
-      parts.slice(1).forEach(p => {
-        if (p.startsWith('key:')) keyPath = p.slice(4);
-        else if (p.startsWith('port:')) port = p.slice(5);
-        else if (p.startsWith('opts:')) opts = p.slice(5);
-      });
-    }
-    container.innerHTML = `
+}
+
+function renderSSHTypeForm(container, existingValue) {
+  const { user, host, port, keyPath, opts } = parseSSHSecret(existingValue);
+  container.innerHTML = `
       <div class="ssh-form-grid">
         <div class="field">
           <label>Username</label>
@@ -307,11 +335,25 @@ function renderSecretTypeForm(type, existingValue = '') {
         <code id="ssh-preview-cmd">ssh ${user ? user + '@' : ''}${host || '<host>'}${port && port !== '22' ? ' -p ' + port : ''}${keyPath ? ' -i ' + keyPath : ''}</code>
       </div>
     `;
-    // Live preview update
-    ['ssh-edit-user', 'ssh-edit-host', 'ssh-edit-port', 'ssh-edit-key'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('input', updateSSHPreview);
-    });
+  bindSSHPreviewListeners();
+}
+
+// Render the right input fields based on secret type
+function renderSecretTypeForm(type, existingValue = '') {
+  const container = document.getElementById('edit-fields-container');
+
+  switch (type) {
+    case 'password':
+      renderPasswordTypeForm(container, existingValue);
+      return;
+    case 'token':
+      renderTokenTypeForm(container, existingValue);
+      return;
+    case 'ssh':
+      renderSSHTypeForm(container, existingValue);
+      return;
+    default:
+      container.innerHTML = '';
   }
 }
 
@@ -640,51 +682,90 @@ async function sshConnect(mode) {
   hide(errId);
   clearSSHStatus();
 
-  let payload = {};
-
-  if (mode === 'manual') {
-    const host = val('ssh-host'), user = val('ssh-user');
-    const port = parseInt(document.getElementById('ssh-port').value) || 22;
-    const auth = document.getElementById('ssh-auth').value;
-    if (!host || !user) return showMsg(errId, 'error', 'Hostname and username are required.');
-    payload = { hostname: host, username: user, port };
-    if (auth === 'password') {
-      const pw = val('ssh-password');
-      if (!pw) return showMsg(errId, 'error', 'Password is required.');
-      payload.password = pw;
-    } else {
-      const keyId = document.getElementById('ssh-key-select').value;
-      if (keyId) {
-        const r = await api('GET', `/api/secrets/${keyId}/reveal`);
-        if (!r?.secret) return showMsg(errId, 'error', 'Could not retrieve SSH key.');
-        payload.ssh_key = r.secret;
-      } else {
-        const pasted = val('ssh-key-paste');
-        if (!pasted) return showMsg(errId, 'error', 'Provide an SSH key.');
-        payload.ssh_key = pasted;
-      }
-    }
-  } else {
-    const keyId = document.getElementById('ssh-stored-select').value;
-    if (!keyId) return showMsg(errId, 'error', 'Select a stored SSH server.');
-    payload = { key_id: keyId };
-  }
+  const payloadResult = mode === 'manual'
+    ? await buildManualSSHPayload(errId)
+    : buildStoredSSHPayload(errId);
+  if (!payloadResult.ok) return;
+  const payload = payloadResult.payload;
 
   setSSHStatus('connecting', 'Connecting…');
 
   if (S.socket?.connected) {
     S.socket.emit('ssh_connect', payload);
-  } else {
-    const r = await api('POST', '/api/ssh/connect', payload);
-    if (r?.success) {
-      S.sshConnectionId = r.connection_id;
-      showSSHTerminal(`Connected: ${r.message}\n`);
-      startSSHOutputPoller();
-    } else {
-      setSSHStatus('error', 'Failed');
-      showMsg(errId, 'error', r?.error || 'Connection failed.');
-    }
+    return;
   }
+
+  await connectSSHViaApi(errId, payload);
+}
+
+function buildStoredSSHPayload(errId) {
+  const keyId = document.getElementById('ssh-stored-select').value;
+  if (!keyId) {
+    showMsg(errId, 'error', 'Select a stored SSH server.');
+    return { ok: false, payload: null };
+  }
+  return { ok: true, payload: { key_id: keyId } };
+}
+
+async function buildManualSSHPayload(errId) {
+  const host = val('ssh-host');
+  const user = val('ssh-user');
+  const port = Number.parseInt(document.getElementById('ssh-port').value, 10) || 22;
+  const auth = document.getElementById('ssh-auth').value;
+
+  if (!host || !user) {
+    showMsg(errId, 'error', 'Hostname and username are required.');
+    return { ok: false, payload: null };
+  }
+
+  const payload = { hostname: host, username: user, port };
+
+  if (auth === 'password') {
+    const pw = val('ssh-password');
+    if (!pw) {
+      showMsg(errId, 'error', 'Password is required.');
+      return { ok: false, payload: null };
+    }
+    payload.password = pw;
+    return { ok: true, payload };
+  }
+
+  const sshKey = await resolveSSHKeyFromInput(errId);
+  if (!sshKey) return { ok: false, payload: null };
+  payload.ssh_key = sshKey;
+  return { ok: true, payload };
+}
+
+async function resolveSSHKeyFromInput(errId) {
+  const keyId = document.getElementById('ssh-key-select').value;
+  if (keyId) {
+    const revealed = await api('GET', `/api/secrets/${keyId}/reveal`);
+    if (!revealed?.secret) {
+      showMsg(errId, 'error', 'Could not retrieve SSH key.');
+      return null;
+    }
+    return revealed.secret;
+  }
+
+  const pasted = val('ssh-key-paste');
+  if (!pasted) {
+    showMsg(errId, 'error', 'Provide an SSH key.');
+    return null;
+  }
+  return pasted;
+}
+
+async function connectSSHViaApi(errId, payload) {
+  const r = await api('POST', '/api/ssh/connect', payload);
+  if (!r?.success) {
+    setSSHStatus('error', 'Failed');
+    showMsg(errId, 'error', r?.error || 'Connection failed.');
+    return;
+  }
+
+  S.sshConnectionId = r.connection_id;
+  showSSHTerminal(`Connected: ${r.message}\n`);
+  startSSHOutputPoller();
 }
 
 function setSSHStatus(state, text) {
@@ -808,12 +889,21 @@ function bindSocketEvents() {
 function openEnvModal() { show('env-backdrop'); }
 function closeEnvModal() { hide('env-backdrop'); S.envFile = null; }
 
-function onEnvFileSelected(input) {
+async function onEnvFileSelected(input) {
   S.envFile = input.files[0];
   if (!S.envFile) return;
-  const reader = new FileReader();
-  reader.onload = e => previewEnvFile(e.target.result);
-  reader.readAsText(S.envFile);
+  const content = await S.envFile.text();
+  previewEnvFile(content);
+}
+
+function stripWrappingQuotes(value) {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1);
+  }
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function previewEnvFile(content) {
@@ -829,10 +919,10 @@ function previewEnvFile(content) {
       <label><input type="checkbox" id="env-check-all" onchange="toggleAllEnvItems(this)" checked /> Select all</label>
     </div>
     ${lines.map((line, i) => {
-      const eqIdx = line.indexOf('=');
-      const key = line.slice(0, eqIdx).trim();
-      const val = line.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
-      return `
+    const eqIdx = line.indexOf('=');
+    const key = line.slice(0, eqIdx).trim();
+    const val = stripWrappingQuotes(line.slice(eqIdx + 1).trim());
+    return `
         <div class="env-item">
           <label>
             <input type="checkbox" class="env-item-check" data-key="${esc(key)}" data-val="${esc(val)}" checked />
@@ -840,7 +930,7 @@ function previewEnvFile(content) {
             <span class="env-val-preview">${val.length > 30 ? val.slice(0, 30) + '…' : esc(val)}</span>
           </label>
         </div>`;
-    }).join('')}
+  }).join('')}
   `;
   show('env-import-btn');
 }
@@ -863,7 +953,8 @@ async function doEnvImport() {
     else errors++;
   }
 
-  showMsg('env-msg', 'success', `✅ ${imported} imported${errors ? `, ${errors} failed` : ''}.`);
+  const failText = errors ? `, ${errors} failed` : '';
+  showMsg('env-msg', 'success', `✅ ${imported} imported${failText}.`);
   await loadSecrets();
   setTimeout(() => closeEnvModal(), 2000);
 }
