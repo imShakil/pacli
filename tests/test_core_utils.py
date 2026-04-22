@@ -1,0 +1,199 @@
+def test_choice_one_retries_until_valid(monkeypatch):
+    from pacli import helpers
+
+    prompts = iter([0, 2])
+    monkeypatch.setattr(helpers.click, "prompt", lambda *args, **kwargs: next(prompts))
+
+    selected = helpers.choice_one(
+        "db",
+        [
+            {"id": "a", "type": "token", "creation_time": 1, "update_time": 1},
+            {"id": "b", "type": "password", "creation_time": 2, "update_time": 2},
+        ],
+    )
+
+    assert selected["id"] == "b"
+
+
+def test_copy_to_clipboard_success(monkeypatch):
+    from pacli import helpers
+
+    captured = {"value": None}
+
+    def fake_copy(value):
+        captured["value"] = value
+
+    monkeypatch.setattr(helpers.pyperclip, "copy", fake_copy)
+    helpers.copy_to_clipboard("hello")
+
+    assert captured["value"] == "hello"
+
+
+def test_copy_to_clipboard_failure(monkeypatch, capsys):
+    from pacli import helpers
+
+    monkeypatch.setattr(helpers.pyperclip, "copy", lambda value: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    helpers.copy_to_clipboard("x")
+    out = capsys.readouterr().out
+    assert "Failed to copy" in out
+
+
+def test_master_password_required_allows_and_blocks(monkeypatch):
+    import pacli.decorators as decorators
+
+    class StoreNotSet:
+        def is_master_set(self):
+            return False
+
+    class StoreSet:
+        def is_master_set(self):
+            return True
+
+    monkeypatch.setattr(decorators, "SecretStore", StoreNotSet)
+
+    called = {"count": 0}
+
+    @decorators.master_password_required
+    def command_one():
+        called["count"] += 1
+        return "ok"
+
+    assert command_one() is None
+    assert called["count"] == 0
+
+    monkeypatch.setattr(decorators, "SecretStore", StoreSet)
+
+    @decorators.master_password_required
+    def command_two():
+        called["count"] += 1
+        return "ok"
+
+    assert command_two() == "ok"
+    assert called["count"] == 1
+
+
+def test_linkly_shorten_success(monkeypatch):
+    from pacli.linklyhq import LinklyHQ
+    import pacli.linklyhq as linkly
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"full_url": "https://sho.rt/x"}
+
+    monkeypatch.setattr(linkly.requests, "post", lambda *args, **kwargs: FakeResponse())
+
+    client = LinklyHQ("k", "wid")
+    assert client.shorten("https://example.com", name="demo") == "https://sho.rt/x"
+
+
+def test_linkly_shorten_request_error(monkeypatch):
+    from pacli.linklyhq import LinklyHQ
+    import pacli.linklyhq as linkly
+
+    def raise_request_error(*args, **kwargs):
+        raise linkly.requests.exceptions.RequestException("network")
+
+    monkeypatch.setattr(linkly.requests, "post", raise_request_error)
+
+    client = LinklyHQ("k", "wid")
+    assert client.shorten("https://example.com") is None
+
+
+def test_parse_and_suggest_ssh_hosts(monkeypatch, tmp_path):
+    from pacli import ssh_utils
+
+    ssh_dir = tmp_path / ".ssh"
+    ssh_dir.mkdir(parents=True)
+    config_path = ssh_dir / "config"
+    config_path.write_text(
+        """
+Host prod
+  HostName 10.0.0.1
+  User ubuntu
+  Port 2222
+
+Host test-box
+  HostName 10.0.0.2
+  User root
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(ssh_utils.Path, "home", lambda: tmp_path)
+
+    all_hosts = ssh_utils.parse_ssh_config()
+    assert set(all_hosts.keys()) == {"prod", "test-box"}
+
+    filtered = ssh_utils.parse_ssh_config("prod")
+    assert set(filtered.keys()) == {"prod"}
+
+    assert ssh_utils.suggest_ssh_hosts("test") == ["test-box"]
+
+
+def test_get_ssh_connection_string():
+    from pacli import ssh_utils
+
+    assert (
+        ssh_utils.get_ssh_connection_string({"hostname": "1.1.1.1", "user": "root", "port": "2200"})
+        == "root@1.1.1.1:2200"
+    )
+    assert ssh_utils.get_ssh_connection_string({"hostname": "1.1.1.1", "user": "root", "port": "22"}) == "root@1.1.1.1"
+    assert ssh_utils.get_ssh_connection_string({"hostname": "", "user": "root"}) is None
+
+
+def test_cli_registers_expected_commands():
+    from pacli.cli import cli
+
+    expected = {
+        "init",
+        "change-master-key",
+        "version",
+        "add",
+        "get",
+        "get-by-id",
+        "list",
+        "update",
+        "update-by-id",
+        "delete",
+        "delete-by-id",
+        "ssh",
+        "export",
+        "short",
+        "cc",
+        "backup",
+        "web",
+    }
+
+    assert expected.issubset(set(cli.commands.keys()))
+
+
+def test_package_version_symbol_exists():
+    import pacli
+
+    assert hasattr(pacli, "__version__")
+    assert isinstance(pacli.__version__, str)
+
+
+def test_get_logger_returns_named_logger(monkeypatch, tmp_path):
+    import pacli.log as log_module
+
+    monkeypatch.setattr(log_module.os.path, "expanduser", lambda p: str(tmp_path / "pacli.log"))
+    logger = log_module.get_logger("demo.logger")
+
+    assert logger.name == "demo.logger"
+
+
+def test_get_logger_permission_error(monkeypatch, tmp_path):
+    import pacli.log as log_module
+    import pytest
+
+    monkeypatch.setattr(log_module.os.path, "expanduser", lambda p: str(tmp_path / "pacli.log"))
+    monkeypatch.setattr(log_module.os, "access", lambda *args, **kwargs: False)
+
+    with pytest.raises(PermissionError):
+        log_module.get_logger("blocked.logger")
