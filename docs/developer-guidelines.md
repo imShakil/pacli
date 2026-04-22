@@ -12,13 +12,51 @@ pacli --help
 
 ## Project Structure
 
-```
-pacli/
-├── cli.py                    # Main CLI entry point
-├── store.py                  # Core encryption & storage
-├── commands/                 # CLI commands (admin, secrets, ssh, utils, web, ai)
-└── web/                      # Flask app (app.py, templates/, static/)
-tests/ & docs/                # Tests and documentation
+```files
+./pacli
+├── LICENSE
+├── README.md
+├── pyproject.toml
+├── requirements.txt
+├── sonar-project.properties
+├── uv.lock
+├── docs
+│   └── developer-guidelines.md
+├── pacli
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── decorators.py
+│   ├── helpers.py
+│   ├── linklyhq.py
+│   ├── log.py
+│   ├── ssh_utils.py
+│   ├── store.py
+│   ├── commands
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   ├── ai.py
+│   │   ├── backup.py
+│   │   ├── secrets.py
+│   │   ├── ssh.py
+│   │   ├── utils.py
+│   │   └── web.py
+│   └── web
+│       ├── __init__.py
+│       ├── app.py
+│       ├── ssh_handler.py
+│       ├── static
+│       │   ├── app.js
+│       │   └── style.css
+│       └── templates
+│           └── index.html
+└── tests
+    ├── __init__.py
+    ├── test_command_helpers.py
+    ├── test_commands_web.py
+    ├── test_core_utils.py
+    ├── test_store.py
+    └── test_web_app.py
+
 ```
 
 ## Coding Standards
