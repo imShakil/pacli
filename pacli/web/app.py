@@ -63,7 +63,7 @@ def _register_csrf_same_origin_protection(app):
             return None
 
         logger.warning(
-            "Rejected state-changing request due to CSRF origin check failure: path=%s origin=%s referer=%s",
+            "Rejected due to CSRF origin check failure: path=%s origin=%s referer=%s",
             request.path,
             origin,
             referer,
@@ -123,7 +123,7 @@ def _register_setup_init_route(app, store):
     @app.route("/api/setup/init", methods=["POST"])
     def setup_init():
         if store.is_master_set():
-            return jsonify({"error": "Already configured"}), 400
+            return jsonify({"error": "Already configured"}), 400  # Noncompliant
 
         data = request.get_json()
         password = data.get("password", "")
@@ -132,7 +132,7 @@ def _register_setup_init_route(app, store):
 
         confirm = data.get("confirm", "")
         if password != confirm:
-            return jsonify({"error": "Passwords do not match"}), 400
+            return jsonify({"error": "Passwords do not match"}), 400  # Noncompliant
 
         from ..store import get_salt, PASSWORD_HASH_PATH, SALT_PATH
         import hashlib
