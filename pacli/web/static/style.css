@@ -273,7 +273,7 @@ label {
     border-radius: 999px;
     background: var(--surface2);
     border: 1.5px solid var(--border2);
-    box-shadow: 0 4px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .04);
     transition: background .3s ease, border-color .3s ease;
     flex-shrink: 0;
     overflow: hidden;
@@ -281,8 +281,8 @@ label {
 
 :root[data-theme='light'] .theme-pill-track {
     background: #f0f0f0;
-    border-color: rgba(0,0,0,.1);
-    box-shadow: 0 4px 14px rgba(0,0,0,.15), inset 0 1px 2px rgba(0,0,0,.06);
+    border-color: rgba(0, 0, 0, .1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .15), inset 0 1px 2px rgba(0, 0, 0, .06);
 }
 
 /* ── Thumb — large circle, 4px gap all around ── */
@@ -299,7 +299,7 @@ label {
     justify-content: center;
     /* dark mode: thumb on RIGHT */
     transform: translateX(38px);
-    transition: transform .35s cubic-bezier(.34,1.5,.64,1);
+    transition: transform .35s cubic-bezier(.34, 1.5, .64, 1);
     box-shadow: 0 3px 12px var(--accent-glow);
     z-index: 2;
     will-change: transform;
@@ -322,12 +322,22 @@ label {
 }
 
 /* dark mode: moon on thumb */
-.pill-icon-sun  { display: none; }
-.pill-icon-moon { display: block; }
+.pill-icon-sun {
+    display: none;
+}
+
+.pill-icon-moon {
+    display: block;
+}
 
 /* light mode: sun on thumb */
-:root[data-theme='light'] .pill-icon-sun  { display: block; }
-:root[data-theme='light'] .pill-icon-moon { display: none; }
+:root[data-theme='light'] .pill-icon-sun {
+    display: block;
+}
+
+:root[data-theme='light'] .pill-icon-moon {
+    display: none;
+}
 
 /* ── Background icon on opposite side of thumb ── */
 .pill-track-icon {
@@ -348,10 +358,16 @@ label {
     color: var(--muted);
     opacity: .5;
 }
-.pill-track-moon { display: none; }
+
+.pill-track-moon {
+    display: none;
+}
 
 /* light mode: faint moon on RIGHT */
-:root[data-theme='light'] .pill-track-sun  { display: none; }
+:root[data-theme='light'] .pill-track-sun {
+    display: none;
+}
+
 :root[data-theme='light'] .pill-track-moon {
     display: block;
     right: 12px;
@@ -377,7 +393,7 @@ label {
 .alert-error {
     background: rgba(248, 113, 113, .1);
     border-color: rgba(248, 113, 113, .3);
-    color: #f87171;
+    color: var(--red);
 }
 
 .alert-success {
@@ -1498,16 +1514,20 @@ label {
 /* ============================================================
    Mobile menu drawer
    ============================================================ */
-.topbar-desktop-only { /* shown on desktop, hidden on mobile — handled in media query */ }
+.topbar-desktop-only {
+    color: var(--muted);
+    /* shown on desktop, hidden on mobile — handled in media query */
+}
 
 .mobile-menu-btn {
-    display: none; /* shown in media query */
+    display: none;
+    /* shown in media query */
 }
 
 .mobile-drawer-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.55);
+    background: rgba(0, 0, 0, .55);
     backdrop-filter: blur(4px);
     z-index: 300;
     animation: fadeIn .18s ease;
@@ -1531,18 +1551,28 @@ label {
     z-index: 301;
     display: flex;
     flex-direction: column;
-    box-shadow: -8px 0 32px rgba(0,0,0,.4);
-    animation: slideInRight .22s cubic-bezier(.34,1.2,.64,1);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, .4);
+    animation: slideInRight .22s cubic-bezier(.34, 1.2, .64, 1);
 }
 
 @keyframes slideInRight {
-    from { transform: translateX(100%); }
-    to   { transform: translateX(0); }
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .mobile-drawer-header {
@@ -1589,14 +1619,14 @@ label {
     display: none;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(52,211,153,.4);
+    box-shadow: 0 4px 20px rgba(52, 211, 153, .4);
     z-index: 50;
     transition: transform .15s, box-shadow .15s;
 }
 
 .mobile-sidebar-fab:hover {
     transform: scale(1.07);
-    box-shadow: 0 6px 28px rgba(52,211,153,.55);
+    box-shadow: 0 6px 28px rgba(52, 211, 153, .55);
 }
 
 .mobile-sidebar-fab:active {
@@ -1612,19 +1642,27 @@ label {
     z-index: 250;
     border-right: none;
     overflow-y: auto;
-    animation: slideUp .22s cubic-bezier(.34,1.2,.64,1);
+    animation: slideUp .22s cubic-bezier(.34, 1.2, .64, 1);
     padding-bottom: 5rem;
 }
 
 @keyframes slideUp {
-    from { transform: translateY(30px); opacity: .4; }
-    to   { transform: translateY(0);    opacity: 1; }
+    from {
+        transform: translateY(30px);
+        opacity: .4;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 /* ============================================================
    Responsive
    ============================================================ */
 @media (max-width: 768px) {
+
     /* Topbar */
     .topbar {
         padding: .65rem 1rem;
@@ -1727,6 +1765,150 @@ label {
     }
 
     .secret-card-actions {
-        opacity: 1; /* always visible on touch */
+        opacity: 1;
+        /* always visible on touch */
+    }
+}
+
+/* ============================================================
+   SSH Terminal — Fullscreen mode & toolbar controls
+   Append these rules to the bottom of style.css
+   ============================================================ */
+
+/* ── Toolbar control buttons (font-size, copy, fullscreen) ── */
+.ssh-font-controls {
+    display: flex;
+    align-items: center;
+    gap: .2rem;
+}
+
+/*
+ * Small icon/text buttons that live in the SSH modal header.
+ * Used for: font-down, font-up, copy-output, fullscreen-toggle.
+ */
+.ssh-ctrl-btn {
+    align-items: center;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--muted2);
+    cursor: pointer;
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: .7rem;
+    font-weight: 700;
+    gap: .2rem;
+    justify-content: center;
+    line-height: 1;
+    padding: .3rem .5rem;
+    transition: background .15s, border-color .15s, color .15s;
+    white-space: nowrap;
+}
+
+.ssh-ctrl-btn:hover {
+    background: rgba(52, 211, 153, .1);
+    border-color: rgba(52, 211, 153, .3);
+    color: var(--accent);
+}
+
+.ssh-ctrl-btn:active {
+    transform: scale(.94);
+}
+
+/* Slightly wider padding for the icon-only fullscreen button */
+.ssh-fullscreen-btn {
+    padding: .3rem .42rem;
+}
+
+/* ── Backdrop: stretch to fill viewport in fullscreen ── */
+#ssh-backdrop.ssh-fullscreen-active {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+}
+
+/* ── Modal: fullscreen layout ── */
+#ssh-modal.ssh-fullscreen {
+    animation: none !important;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    inset: 0;
+    margin: 0;
+    max-height: 100vh;
+    max-width: 100vw;
+    overflow: hidden;
+    position: fixed;
+    transform: none !important;
+    width: 100vw;
+    z-index: 9000;
+}
+
+/* Sticky header must still be visible */
+#ssh-modal.ssh-fullscreen .modal-header {
+    flex-shrink: 0;
+}
+
+/* Body fills remaining vertical space */
+#ssh-modal.ssh-fullscreen .modal-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    /* critical: allows flex child to shrink below content size */
+    overflow: hidden;
+    padding: .6rem .9rem;
+}
+
+/* Connect-area: centred, reasonable max-width so it doesn't sprawl */
+#ssh-modal.ssh-fullscreen #ssh-connect-area {
+    margin: 0 auto;
+    max-width: 680px;
+    overflow-y: auto;
+    width: 100%;
+}
+
+/* Terminal wrap fills the body */
+#ssh-modal.ssh-fullscreen #ssh-terminal-wrap {
+    display: flex !important;
+    /* override .hidden's display:none once the
+                                   terminal is open; CSS specificity wins here
+                                   only when #ssh-terminal-wrap is not hidden */
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Terminal itself stretches to fill the wrap */
+#ssh-modal.ssh-fullscreen .ssh-terminal {
+    border-radius: 6px;
+    flex: 1;
+    height: 100%;
+}
+
+/* Output area: remove fixed height, let flexbox size it */
+#ssh-modal.ssh-fullscreen .ssh-output {
+    flex: 1;
+    height: 0;
+    /* flex item trick — grows to fill available space */
+    max-height: none;
+}
+
+/* ── Smooth width transition when exiting fullscreen ── */
+#ssh-modal:not(.ssh-fullscreen) {
+    transition: max-width .22s cubic-bezier(.34, 1.2, .64, 1);
+}
+
+/* ── Responsive: hide the fullscreen button on mobile
+      (the modal already occupies most of the screen there) ── */
+@media (max-width: 768px) {
+    .ssh-fullscreen-btn {
+        display: none;
+    }
+
+    .ssh-font-controls {
+        display: none;
+        /* also hide font controls on very small screens */
     }
 }

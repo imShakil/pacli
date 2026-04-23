@@ -114,7 +114,6 @@
         <div class="sidebar-shortcuts">
           <div class="sidebar-section-title">Shortcuts</div>
           <div class="shortcut-list">
-            <span class="shortcut-item"><kbd class="kbd">⌘N</kbd> Add secret</span>
             <span class="shortcut-item"><kbd class="kbd">Esc</kbd> Close modal</span>
           </div>
         </div>
@@ -225,13 +224,33 @@
     </div>
   </div>
 
-  <!-- SSH Terminal modal — improved -->
+  <!-- SSH Terminal modal — with fullscreen toggle + font controls -->
   <div id="ssh-backdrop" class="modal-backdrop hidden">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg" id="ssh-modal">
       <div class="modal-header">
         <h3>⌨️ SSH Terminal</h3>
-        <div style="display:flex;align-items:center;gap:.6rem">
+        <div style="display:flex;align-items:center;gap:.5rem">
           <span id="ssh-status" class="ssh-status" style="display:none"></span>
+
+          <!-- Font size + copy controls (shown once connected) -->
+          <div id="ssh-font-controls" class="ssh-font-controls hidden">
+            <button class="ssh-ctrl-btn" onclick="adjustTerminalFont(-1)" title="Decrease font size" aria-label="Decrease font size">A−</button>
+            <button class="ssh-ctrl-btn" onclick="adjustTerminalFont(1)" title="Increase font size" aria-label="Increase font size">A+</button>
+            <button class="ssh-ctrl-btn" onclick="copySSHOutput()" title="Copy terminal output" aria-label="Copy terminal output">⎘</button>
+          </div>
+
+          <!-- Fullscreen toggle -->
+          <button id="ssh-fullscreen-btn" class="ssh-ctrl-btn ssh-fullscreen-btn" onclick="toggleSSHFullscreen()" title="Fullscreen (F11)" aria-label="Toggle fullscreen">
+            <svg id="ssh-fs-icon-expand" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+            <svg id="ssh-fs-icon-compress" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+              <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+              <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
+            </svg>
+          </button>
+
           <button class="modal-close" onclick="closeSSHModal()">✕</button>
         </div>
       </div>
@@ -294,7 +313,7 @@
 
         <!-- Terminal -->
         <div id="ssh-terminal-wrap" class="hidden">
-          <div class="ssh-terminal">
+          <div class="ssh-terminal" id="ssh-terminal">
             <div class="ssh-terminal-toolbar">
               <span class="terminal-dot red"></span>
               <span class="terminal-dot yellow"></span>
@@ -422,6 +441,7 @@
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='ssh_terminal.js') }}"></script>
 
   <script>
     // Type selector UI helper (bridges visual buttons to hidden select)
@@ -450,7 +470,7 @@
 
     bindBackdropClose('edit-backdrop',   closeEditModal);
     bindBackdropClose('view-backdrop',   closeViewModal);
-    bindBackdropClose('ssh-backdrop',    closeSSHModal);
+    // NOTE: ssh-backdrop intentionally NOT closed on outside click when connected
     bindBackdropClose('env-backdrop',    closeEnvModal);
     bindBackdropClose('backup-backdrop', closeBackupModal);
     bindFilePicker('env-upload-zone', 'env-file-input');

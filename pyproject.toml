@@ -6,7 +6,9 @@ readme = "README.md"
 authors = [
     { name = "Mobarak Hosen Shakil", email = "mh.ice.iu@gmail.com" }
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
+
 requires-python = ">=3.10"
 dependencies = [
     "cryptography==46.0.7",
@@ -80,7 +82,6 @@ dependencies = [
 keywords = ["cli", "secrets", "encryption", "password", "token", "clipboard", "security"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
