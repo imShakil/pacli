@@ -73,6 +73,7 @@ def change_master_key():
 
 
 @click.command()
+@click.option("-v", "--version", is_flag=True, help="Show the current version of pacli.")
 def version():
     """Show the current version of pacli."""
     AUTHOR = "Unknown"

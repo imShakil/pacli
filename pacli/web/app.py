@@ -376,12 +376,15 @@ def _register_ssh_connect_route(app, store, ssh_manager, require_auth):
                 result = _resolve_stored_ssh(store, key_id)
                 if isinstance(result, str) and result.startswith("error:"):
                     return jsonify({"error": result[6:]}), 400
+                # Unpack host details from the stored secret.
+                # `password` retains whatever the user typed in the modal —
+                # this is the fix for Bug 1: password was silently dropped here.
                 username, hostname, port = result
 
             if not hostname or not username:
                 return jsonify({"error": "Hostname and username are required"}), 400
 
-            key_filename = _resolve_key(store, ssh_key, None)
+            key_filename = _resolve_key(store, ssh_key, key_id)
 
             connection_id = str(uuid.uuid4())
             success = ssh_manager.create_connection(connection_id, hostname, username, port, password, key_filename)
@@ -431,8 +434,16 @@ def _register_ssh_execute_route(app, ssh_manager, require_auth):
             if terminal.send_command(command + "\n"):
                 import time
 
-                time.sleep(0.4)
-                output = terminal.get_output()
+                timeout = 2
+                start = time.time()
+                output = ""
+
+                while time.time() - start < timeout:
+                    chunk = terminal.get_output()
+                    if chunk:
+                        output += chunk
+                        break
+                    time.sleep(0.05)
                 return jsonify({"success": True, "output": output})
             return jsonify({"error": "Failed to send command"}), 400
         except Exception as e:
@@ -503,6 +514,7 @@ def _register_socket_ssh_connect_handler(socketio, store, ssh_manager):
                 if isinstance(result, str) and result.startswith("error:"):
                     emit("error", {"message": result[6:]})
                     return
+                # Preserve the password the user typed — fix for Bug 1 (WS path).
                 username, hostname, port = result
 
             if not hostname or not username:
@@ -621,34 +633,35 @@ def _resolve_stored_ssh(store, key_id):
 
 
 def _resolve_key(store, ssh_key_text, key_id):
-    """Save SSH key to a temp file and return path, or None."""
+    """Normalize and store SSH key safely."""
     import tempfile
+    import os
+
+    key_text = None
 
     if ssh_key_text:
+        key_text = ssh_key_text.strip() + "\n"
+        key_text = key_text.replace("\r\n", "\n")
+
+    elif key_id:
+        secret = store.get_secret_by_id(key_id)
+        if secret:
+            key_text = secret.get("secret", "").strip() + "\n"
+
+    if key_text:
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as f:
-            f.write(ssh_key_text)
+            f.write(key_text)
             path = f.name
         os.chmod(path, 0o600)
         return path
-    if key_id:
-        secret = store.get_secret_by_id(key_id)
-        if secret:
-            ssh_data = secret.get("secret", "")
-            # Only treat as raw key if it doesn't look like a user:host string
-            if not ("|" in ssh_data and ":" in ssh_data.split("|")[0]):
-                with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pem") as f:
-                    f.write(ssh_data)
-                    path = f.name
-                os.chmod(path, 0o600)
-                return path
+
     return None
 
 
 def _start_output_streaming(socketio, ssh_manager, connection_id):
     """
     Background thread that continuously reads SSH output and pushes it
-    to the WebSocket room. This replaces the fire-and-forget polling in
-    the old handle_ssh_command handler.
+    to the WebSocket room.
     """
     import threading
     import time
