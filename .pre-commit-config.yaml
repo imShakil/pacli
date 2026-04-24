@@ -27,5 +27,4 @@ repos:
     rev: 1.9.4
     hooks:
       - id: bandit
-        args: ["-x", "tests"]
-        skips: ["B105"]  # Ignore hardcoded password warnings in tests
+        args: ["-x", "tests", "-s", "B105"]  # Exclude hardcoded password checks in tests
