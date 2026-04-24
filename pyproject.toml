@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "cryptography==46.0.7",
-    "click==8.2.1",
+    "click==8.3.3",
     "requests==2.33.1",
     "pyperclip==1.11.0",
     "flask==3.1.3",
