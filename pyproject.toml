@@ -28,7 +28,7 @@ dependencies = [
     "cachecontrol==0.14.4",
     "certifi==2025.8.3",
     "cffi==2.0.0",
-    "charset-normalizer==3.4.3",
+    "charset-normalizer==3.4.7",
     "cyclonedx-python-lib==11.7.0",
     "defusedxml==0.7.1",
     "docutils==0.22.4",
