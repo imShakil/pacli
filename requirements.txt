@@ -46,7 +46,7 @@ pycparser==2.22
 Pygments==2.20.0
 PyNaCl==1.6.2
 pyparsing==3.3.2
-pyperclip==1.9.0
+pyperclip==1.11.0
 pyproject_hooks==1.2.0
 python-engineio==4.13.1
 python-socketio==5.16.1
