@@ -85,6 +85,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v3.0.0
         with:
+          body_path: release.txt
           files: |
             dist/*
             release.txt
