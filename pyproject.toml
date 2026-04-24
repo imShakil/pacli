@@ -24,7 +24,7 @@ dependencies = [
     "bidict==0.23.1",
     "blinker==1.9.0",
     "boolean-py==5.0",
-    "build==1.4.3",
+    "build==1.4.4",
     "cachecontrol==0.14.4",
     "certifi==2025.8.3",
     "cffi==2.0.0",
