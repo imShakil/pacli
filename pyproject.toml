@@ -26,7 +26,7 @@ dependencies = [
     "boolean-py==5.0",
     "build==1.4.4",
     "cachecontrol==0.14.4",
-    "certifi==2025.8.3",
+    "certifi==2026.4.22",
     "cffi==2.0.0",
     "charset-normalizer==3.4.7",
     "cyclonedx-python-lib==11.7.0",
