@@ -174,6 +174,11 @@ curl -s https://api.example.com/data | pacli cc
 
 [![Web UI](https://mhosen.com/projects/pacli/pacli-web-ui.png)](https://mhosen.com/projects/pacli---secrets-management-cli)
 
+### Redesigned UI (1.4.0+)
+
+<img width="1512" height="771" alt="Screenshot 2026-04-25 at 21 26 34" src="https://github.com/user-attachments/assets/af509b71-582e-4456-9032-d1fa67ba0eee" />
+
+
 Launch the Web UI to manage your secrets through a modern, user-friendly interface:
 
 ```sh
