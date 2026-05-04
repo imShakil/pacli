@@ -280,7 +280,7 @@ class SecretStore:
         dk_b64 = base64.b64encode(dk).decode("utf-8")
         return f"legacy_pbkdf2_sha256${self.PBKDF2_ITERATIONS}${salt_b64}${dk_b64}"
 
-    def _verify_legacy_sha256_with_pbkdf2(self, password: str, stored: str) -> bool:
+    def _verify_legacy_sha256_with_pbkdf2(self, legacy_sha256_hex: str, stored: str) -> bool:
         try:
             scheme, iter_str, salt_b64, expected_b64 = stored.split("$", 3)
             if scheme != "legacy_pbkdf2_sha256":
@@ -288,8 +288,7 @@ class SecretStore:
             iterations = int(iter_str)
             salt = base64.b64decode(salt_b64.encode("utf-8"))
             expected = base64.b64decode(expected_b64.encode("utf-8"))
-            legacy_actual = hashlib.sha256(password.encode()).hexdigest().encode("utf-8")
-            actual = hashlib.pbkdf2_hmac("sha256", legacy_actual, salt, iterations)
+            actual = hashlib.pbkdf2_hmac("sha256", legacy_sha256_hex.encode("utf-8"), salt, iterations)
             return hmac.compare_digest(actual, expected)
         except Exception:
             return False
@@ -306,15 +305,13 @@ class SecretStore:
                 # Legacy fallback: support old SHA-256 hashes and transparently upgrade.
                 legacy_ok = False
 
+                legacy_sha256 = hashlib.sha256(password.encode()).hexdigest()
+
                 if stored_hash.startswith("legacy_pbkdf2_sha256$"):
-                    legacy_ok = self._verify_legacy_sha256_with_pbkdf2(password, stored_hash)
+                    legacy_ok = self._verify_legacy_sha256_with_pbkdf2(legacy_sha256, stored_hash)
                 else:
                     # One-time migration for existing raw SHA-256 legacy values.
-                    legacy_sha256 = hashlib.sha256(password.encode()).hexdigest()
-                    wrapped = self._hash_legacy_sha256_with_pbkdf2(legacy_sha256)
-                    with open(PASSWORD_HASH_PATH, "w") as f:
-                        f.write(wrapped)
-                    legacy_ok = self._verify_legacy_sha256_with_pbkdf2(password, wrapped)
+                    legacy_ok = hmac.compare_digest(stored_hash, legacy_sha256)
 
                 if legacy_ok:
                     with open(PASSWORD_HASH_PATH, "w") as f:
