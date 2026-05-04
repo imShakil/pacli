@@ -267,6 +267,33 @@ class SecretStore:
         except Exception:
             return False
 
+    def _hash_legacy_sha256_with_pbkdf2(self, legacy_sha256_hex: str, salt: bytes = None) -> str:
+        if salt is None:
+            salt = os.urandom(self.PBKDF2_SALT_BYTES)
+        dk = hashlib.pbkdf2_hmac(
+            "sha256",
+            legacy_sha256_hex.encode("utf-8"),
+            salt,
+            self.PBKDF2_ITERATIONS,
+        )
+        salt_b64 = base64.b64encode(salt).decode("utf-8")
+        dk_b64 = base64.b64encode(dk).decode("utf-8")
+        return f"legacy_pbkdf2_sha256${self.PBKDF2_ITERATIONS}${salt_b64}${dk_b64}"
+
+    def _verify_legacy_sha256_with_pbkdf2(self, password: str, stored: str) -> bool:
+        try:
+            scheme, iter_str, salt_b64, expected_b64 = stored.split("$", 3)
+            if scheme != "legacy_pbkdf2_sha256":
+                return False
+            iterations = int(iter_str)
+            salt = base64.b64decode(salt_b64.encode("utf-8"))
+            expected = base64.b64decode(expected_b64.encode("utf-8"))
+            legacy_actual = hashlib.sha256(password.encode()).hexdigest().encode("utf-8")
+            actual = hashlib.pbkdf2_hmac("sha256", legacy_actual, salt, iterations)
+            return hmac.compare_digest(actual, expected)
+        except Exception:
+            return False
+
     def verify_master_password(self, password):
         try:
             if os.path.exists(PASSWORD_HASH_PATH):
@@ -277,7 +304,18 @@ class SecretStore:
                     return self._verify_password_pbkdf2(password, stored_hash)
 
                 # Legacy fallback: support old SHA-256 hashes and transparently upgrade.
-                legacy_ok = hashlib.sha256(password.encode()).hexdigest() == stored_hash
+                legacy_ok = False
+
+                if stored_hash.startswith("legacy_pbkdf2_sha256$"):
+                    legacy_ok = self._verify_legacy_sha256_with_pbkdf2(password, stored_hash)
+                else:
+                    # One-time migration for existing raw SHA-256 legacy values.
+                    legacy_sha256 = hashlib.sha256(password.encode()).hexdigest()
+                    wrapped = self._hash_legacy_sha256_with_pbkdf2(legacy_sha256)
+                    with open(PASSWORD_HASH_PATH, "w") as f:
+                        f.write(wrapped)
+                    legacy_ok = self._verify_legacy_sha256_with_pbkdf2(password, wrapped)
+
                 if legacy_ok:
                     with open(PASSWORD_HASH_PATH, "w") as f:
                         f.write(self._hash_password_pbkdf2(password))
