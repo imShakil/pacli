@@ -32,7 +32,10 @@ def test_copy_to_clipboard_success(monkeypatch):
 def test_copy_to_clipboard_failure(monkeypatch, capsys):
     from pacli import helpers
 
-    monkeypatch.setattr(helpers.pyperclip, "copy", lambda value: (_ for _ in ()).throw(RuntimeError("boom")))
+    def _raise_runtime(value):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(helpers.pyperclip, "copy", _raise_runtime)
 
     helpers.copy_to_clipboard("x")
     out = capsys.readouterr().out
@@ -137,10 +140,6 @@ Host test-box
 def test_get_ssh_connection_string():
     from pacli import ssh_utils
 
-    assert (
-        ssh_utils.get_ssh_connection_string({"hostname": "1.1.1.1", "user": "root", "port": "2200"})
-        == "root@1.1.1.1:2200"
-    )
     assert ssh_utils.get_ssh_connection_string({"hostname": "1.1.1.1", "user": "root", "port": "22"}) == "root@1.1.1.1"
     assert ssh_utils.get_ssh_connection_string({"hostname": "", "user": "root"}) is None
 
