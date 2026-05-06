@@ -1,6 +1,7 @@
 """SSH connection handler for web-based terminal access."""
 
 import re
+import os
 import paramiko  # type: ignore[import-untyped]
 import threading
 import queue
@@ -53,8 +54,12 @@ class SSHTerminal:
         """Establish SSH connection."""
         try:
             self.client = paramiko.SSHClient()
-            # nosec B507
-            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec
+            self.client.load_system_host_keys()
+            try:
+                self.client.load_host_keys(os.path.expanduser("~/.ssh/known_hosts"))
+            except OSError:
+                pass
+            self.client.set_missing_host_key_policy(paramiko.RejectPolicy())
 
             connect_kwargs = {
                 "hostname": self.hostname,

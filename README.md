@@ -10,6 +10,7 @@ ___
 [![Python Versions](https://img.shields.io/pypi/pyversions/pacli-tool.svg)](https://pypi.org/project/pacli-tool/)
 [![License](https://img.shields.io/github/license/imshakil/pacli)](LICENSE)
 [![security:bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/imShakil/pacli)
+![Badge](https://hitscounter.dev/api/hit?url=https%3A%2F%2Fgithub.com%2FimShakil%2Fpacli&label=&icon=github&color=%23198754&message=&style=flat&tz=UTC)
 
 pacli is a secure, local-first secrets manager that stores your passwords, API keys, and SSH credentials with encryption and master password protection - no cloud dependencies required.
 
@@ -173,6 +174,11 @@ curl -s https://api.example.com/data | pacli cc
 ## Web UI
 
 [![Web UI](https://mhosen.com/projects/pacli/pacli-web-ui.png)](https://mhosen.com/projects/pacli---secrets-management-cli)
+
+### Redesigned UI (1.4.0+)
+
+<img width="1512" height="771" alt="Screenshot 2026-04-25 at 21 26 34" src="https://github.com/user-attachments/assets/af509b71-582e-4456-9032-d1fa67ba0eee" />
+
 
 Launch the Web UI to manage your secrets through a modern, user-friendly interface:
 
