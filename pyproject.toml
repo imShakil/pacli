@@ -49,7 +49,7 @@ dependencies = [
     "markupsafe==3.0.3",
     "mdurl==0.1.2",
     "more-itertools==11.0.2",
-    "msgpack==1.1.2",
+    "msgpack==1.2.1",
     "nh3==0.3.5",
     "packageurl-python==0.17.6",
     "packaging==26.2",
