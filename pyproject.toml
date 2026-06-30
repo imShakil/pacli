@@ -63,7 +63,7 @@ dependencies = [
     "pynacl==1.6.2",
     "pyparsing==3.3.2",
     "pyproject-hooks==1.2.0",
-    "python-engineio==4.13.1",
+    "python-engineio==4.13.2",
     "readme-renderer==44.0",
     "requests-toolbelt==1.0.0",
     "rfc3986==2.0.0",
