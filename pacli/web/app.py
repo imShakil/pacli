@@ -26,8 +26,7 @@ def create_app():
     store = SecretStore()
     ssh_manager = SSHConnectionManager()
     vault_manager = VaultManager()
-    socketio = SocketIO()
-    socketio.init_app(app)
+    socketio = SocketIO(app)  # type: ignore
 
     _register_csrf_same_origin_protection(app)
     require_auth = _build_require_auth(store)
