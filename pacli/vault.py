@@ -729,7 +729,8 @@ class VaultManager:
             )
 
         if results and results[0]["secret"] is not None:
-            self._log_audit(vault_name, identity.get("user_id", ""), "read", results[0]["id"], f"Read secret '{label}'")
+            target_id = str(results[0].get("id") or "")
+            self._log_audit(vault_name, identity.get("user_id", ""), "read", target_id, f"Read secret '{label}'")
 
         return results
 
@@ -737,14 +738,21 @@ class VaultManager:
     # Audit Log
     # ------------------------------------------------------------------
 
-    def _log_audit(self, vault_name: str, user_id: str, action: str, target_id: str, details: str = ""):
+    def _log_audit(
+        self,
+        vault_name: str,
+        user_id: str,
+        action: str,
+        target_id: str | None = "",
+        details: str = "",
+    ):
         """Write an entry to the vault's audit log."""
         try:
             conn = self._get_vault_conn(vault_name)
             conn.execute(
                 "INSERT INTO audit_log (id, user_id, action, target_id, details, timestamp) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (uuid.uuid4().hex[:8], user_id, action, target_id, details, int(time.time())),
+                (uuid.uuid4().hex[:8], user_id, action, target_id or "", details, int(time.time())),
             )
             conn.commit()
         except Exception as e:
