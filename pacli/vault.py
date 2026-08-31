@@ -27,6 +27,7 @@ from .log import get_logger
 logger = get_logger("pacli.vault")
 
 VAULTS_KEY = "vaults"
+VAULT_DB_NAME = "vault.db"
 PACLI_DIR = os.path.expanduser("~/.config/pacli")
 VAULTS_DIR = os.path.join(PACLI_DIR, VAULTS_KEY)
 REGISTRY_PATH = os.path.join(VAULTS_DIR, "vault_registry.json")
@@ -203,7 +204,7 @@ class VaultManager:
             f.write(wrapped_key)
 
         # Initialize vault database
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
         conn = sqlite3.connect(db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS secrets (
@@ -279,7 +280,7 @@ class VaultManager:
 
         for name, meta in self._registry[VAULTS_KEY].items():
             vault_dir = os.path.join(VAULTS_DIR, name)
-            db_path = os.path.join(vault_dir, "vault.db")
+            db_path = os.path.join(vault_dir, VAULT_DB_NAME)
             if not os.path.exists(db_path):
                 continue
 
@@ -363,7 +364,7 @@ class VaultManager:
 
         user_id = identity["user_id"]
         vault_dir = self._get_vault_dir(name)
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
 
         if not os.path.exists(db_path):
             raise ValueError(f"Vault database for '{name}' not found")
@@ -397,7 +398,7 @@ class VaultManager:
             raise PermissionError("No user identity configured")
         user_id = identity["user_id"]
         vault_dir = self._get_vault_dir(name)
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
 
         conn = sqlite3.connect(db_path)
         row = conn.execute("SELECT wrapped_key FROM members WHERE user_id = ?", (user_id,)).fetchone()
@@ -426,7 +427,7 @@ class VaultManager:
 
         user_id = identity["user_id"]
         vault_dir = self._get_vault_dir(vault_name)
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
 
         if not os.path.exists(db_path):
             raise ValueError(f"Vault '{vault_name}' not found")
@@ -470,7 +471,7 @@ class VaultManager:
         # Get the raw vault key from adder's wrapped copy
         vault_dir = self._get_vault_dir(vault_name)
         identity = get_user_identity()
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
         conn = sqlite3.connect(db_path)
 
         # Check if already a member
@@ -510,7 +511,7 @@ class VaultManager:
             raise ValueError("Cannot remove yourself from the vault")
 
         vault_dir = self._get_vault_dir(vault_name)
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
         conn = sqlite3.connect(db_path)
 
         cursor = conn.execute("DELETE FROM members WHERE user_id = ?", (target_user_id,))
@@ -537,7 +538,7 @@ class VaultManager:
             raise ValueError(f"Invalid role: {new_role}. Must be one of: viewer, editor, admin")
 
         vault_dir = self._get_vault_dir(vault_name)
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
         conn = sqlite3.connect(db_path)
 
         cursor = conn.execute("UPDATE members SET role = ? WHERE user_id = ?", (new_role, target_user_id))
@@ -559,7 +560,7 @@ class VaultManager:
     def list_members(self, vault_name: str) -> list[dict]:
         """List all members of a vault."""
         vault_dir = self._get_vault_dir(vault_name)
-        db_path = os.path.join(vault_dir, "vault.db")
+        db_path = os.path.join(vault_dir, VAULT_DB_NAME)
         if not os.path.exists(db_path):
             return []
         conn = sqlite3.connect(db_path)
@@ -576,7 +577,7 @@ class VaultManager:
         attr = f"vault_conn_{vault_name}"
         if not hasattr(self._local, attr) or getattr(self._local, attr) is None:
             vault_dir = self._get_vault_dir(vault_name)
-            db_path = os.path.join(vault_dir, "vault.db")
+            db_path = os.path.join(vault_dir, VAULT_DB_NAME)
             setattr(self._local, attr, sqlite3.connect(db_path, check_same_thread=False))
         return getattr(self._local, attr)
 
