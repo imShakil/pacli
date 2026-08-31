@@ -314,7 +314,15 @@ def _register_sync_server_routes(app: Flask, db: SyncServerDB, require_token):
 
 
 def create_sync_server_app(db: SyncServerDB | None = None) -> Flask:
-    """Create Flask application for the sync server."""
+    """
+    Create Flask application for the sync server.
+
+    Security Note (CSRF Exemption):
+        CSRF protection is not applicable here because this is a purely stateless REST API
+        consumed by CLI clients and automated sync jobs. Authentication relies exclusively
+        on custom HTTP headers (`Authorization: Bearer <token>` or `X-Pacli-Token`), with no
+        cookie-based ambient session credentials.
+    """
     if db is None:
         db = SyncServerDB()
 
