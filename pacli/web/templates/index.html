@@ -93,9 +93,9 @@
       <aside class="sidebar">
         <!-- Vault switcher -->
         <div class="sidebar-vault-box">
-          <div class="sidebar-section-title">Vault</div>
+          <label for="vault-select" class="sidebar-section-title">Vault</label>
           <div class="vault-select-row">
-            <select id="vault-select" class="vault-select" onchange="onVaultChange(this.value)">
+            <select id="vault-select" class="vault-select" aria-label="Select Vault" onchange="onVaultChange(this.value)">
               <option value="">🔒 Personal Store</option>
             </select>
             <button class="btn btn-ghost btn-sm" onclick="openNewVaultModal()" title="Create new team vault">+</button>
@@ -121,10 +121,10 @@
           </div>
         </div>
         <div>
-          <div class="sidebar-section-title">Search <kbd class="kbd">⌘K</kbd></div>
+          <label for="search-input" class="sidebar-section-title">Search <kbd class="kbd">⌘K</kbd></label>
           <div class="search-wrap">
             <span class="search-icon">🔍</span>
-            <input type="text" id="search-input" placeholder="Search labels…" oninput="doSearch(this.value)" />
+            <input type="text" id="search-input" aria-label="Search secrets by label" placeholder="Search labels…" oninput="doSearch(this.value)" />
           </div>
         </div>
         <div class="sidebar-shortcuts">
@@ -344,7 +344,7 @@
             <div id="ssh-output" class="ssh-output"></div>
             <div class="ssh-input-row">
               <span class="ssh-prompt">$&nbsp;</span>
-              <input type="text" class="ssh-cmd" id="ssh-cmd" placeholder="type command and press Enter…" disabled
+              <input type="text" class="ssh-cmd" id="ssh-cmd" aria-label="SSH Command Input" placeholder="type command and press Enter…" disabled
                 onkeydown="sshKey(event)" autocomplete="off" spellcheck="false" />
               <button class="btn btn-danger btn-sm ssh-disconnect-btn" onclick="sshDisconnect()">Disconnect</button>
             </div>
@@ -372,7 +372,8 @@
           ondrop="event.preventDefault();this.classList.remove('drag-over');S.envFile=event.dataTransfer.files[0];const r=new FileReader();r.onload=e=>previewEnvFile(e.target.result);r.readAsText(S.envFile)">
           <p>📂 Click or drag &amp; drop a <code class="inline-code">.env</code> file</p>
         </button>
-        <input type="file" id="env-file-input" accept=".env,text/plain" class="hidden"
+        <label for="env-file-input" class="hidden">Choose .env File</label>
+        <input type="file" id="env-file-input" aria-label="Choose .env file" accept=".env,text/plain" class="hidden"
           onchange="onEnvFileSelected(this)" />
 
         <div id="env-preview" class="env-preview"></div>
@@ -422,14 +423,15 @@
               ondragleave="this.classList.remove('drag-over')" ondrop="handleFileDrop(event)">
               <p id="upload-zone-label">📂 Click to choose a .pacli file, or drag & drop</p>
             </button>
-            <input type="file" id="backup-file-input" accept=".pacli" class="hidden" onchange="onFileSelected(this)" />
+            <label for="backup-file-input" class="hidden">Choose Backup File</label>
+            <input type="file" id="backup-file-input" aria-label="Choose backup file" accept=".pacli" class="hidden" onchange="onFileSelected(this)" />
             <div class="field"><label for="backup-import-pw">Backup password</label>
               <input type="password" id="backup-import-pw" placeholder="Password used when backup was created" />
             </div>
-            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
+            <label for="import-overwrite" style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;cursor:pointer">
               <input type="checkbox" id="import-overwrite" style="width:auto;margin:0" />
               <span style="font-size:.875rem">Overwrite existing secrets</span>
-            </div>
+            </label>
             <button class="btn btn-primary" onclick="doBackupImport()">⬆️ Import Secrets</button>
           </div>
           <div id="backup-import-msg" class="alert hidden"></div>

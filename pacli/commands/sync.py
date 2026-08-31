@@ -68,12 +68,81 @@ def config_show():
     click.echo("📋 Saved Sync Configuration:")
     click.echo(f"   Server: {cfg.get('server_url', '—')}")
     token = cfg.get("token", "")
-    masked = token[:12] + "..." if len(token) > 16 else ("(set)" if token else "—")
+    if len(token) > 16:
+        masked = token[:12] + "..."
+    elif token:
+        masked = "(set)"
+    else:
+        masked = "—"
     click.echo(f"   Token:  {masked}")
 
 
 # ------------------------------------------------------------------
-# Push / Pull / Status
+# Push / Pull / Status Helpers
+# ------------------------------------------------------------------
+
+
+def _pull_from_server_handler(vault_name: str, server_url: str, token: str, store_fernet, overwrite: bool):
+    """Handle pulling and importing a vault from a sync server."""
+    click.echo(f"☁️ Pulling vault '{vault_name}' from {server_url}...")
+    try:
+        blob, meta = pull_from_server(vault_name, server_url, token)
+        if meta.get("not_modified") or blob is None:
+            click.echo("✅ Vault is already up-to-date (no changes on server).")
+            return
+
+        vm = VaultManager()
+        stats = vm.import_vault_backup(vault_name, blob, token, store_fernet, merge=not overwrite)
+
+        v_str = f"v{meta['version']}" if meta.get("version") else ""
+        by_str = f"by {meta['updated_by']}" if meta.get("updated_by") else ""
+        click.echo(
+            f"✅ Pulled vault '{vault_name}' {v_str} {by_str}: "
+            f"{stats['imported']} imported, {stats['skipped']} skipped."
+        )
+        logger.info(f"Pulled vault '{vault_name}' from server: {stats}")
+    except Exception as e:
+        click.echo(f"❌ Server pull failed: {e}")
+        logger.error(f"Server pull error: {e}")
+
+
+def _pull_from_filesystem_handler(
+    vault_name: str, source_path: str, sync_password: str | None, store_fernet, overwrite: bool
+):
+    """Handle pulling and importing a vault from a filesystem directory."""
+    source_path = os.path.expanduser(source_path)
+    filename = f"{vault_name}.pacli"
+    filepath = os.path.join(source_path, filename)
+
+    if not os.path.exists(filepath):
+        click.echo(f"❌ File not found: {filepath}")
+        click.echo(f"   Expected a file named '{filename}' in {source_path}")
+        return
+
+    if not sync_password:
+        sync_password = getpass("Sync password: ")
+
+    try:
+        with open(filepath, "rb") as f:
+            blob = f.read()
+
+        vm = VaultManager()
+        stats = vm.import_vault_backup(vault_name, blob, sync_password, store_fernet, merge=not overwrite)
+
+        click.echo(
+            f"✅ Pulled vault '{vault_name}': {stats['imported']} imported, "
+            f"{stats['skipped']} skipped, {stats['errors']} errors."
+        )
+        logger.info(f"Vault '{vault_name}' pulled from {filepath}: {stats}")
+    except ValueError as e:
+        click.echo(f"❌ {e}")
+    except Exception as e:
+        click.echo(f"❌ Pull failed: {e}")
+        logger.error(f"Sync pull failed: {e}")
+
+
+# ------------------------------------------------------------------
+# Push / Pull / Status Commands
 # ------------------------------------------------------------------
 
 
@@ -109,22 +178,22 @@ def sync_push(vault_name, target_path, server_url, token, sync_password):
     if server_url and not target_path:
         if not token:
             click.echo("❌ Server URL configured but no access token provided.")
-            click.echo("   Use 'pacli sync config set --token <token>' or pass --token.")
+            click.echo("   Use --token <tok> or 'pacli sync config set --token <tok>'.")
             return
 
-        click.echo(f"☁️ Exporting and pushing vault '{vault_name}' to {server_url}...")
+        click.echo(f"☁️ Pushing vault '{vault_name}' to {server_url}...")
+        vm = VaultManager()
         try:
-            vm = VaultManager()
-            # For server relay, encrypt blob with vault key material
+            # Server export uses token as encryption password for the transit blob
             blob = vm.export_vault_backup(vault_name, token, store.fernet)
-
             identity = get_user_identity()
             user_name = identity.get("user_name", "")
-
             res = push_to_server(vault_name, blob, server_url, token, user_name=user_name)
-            status_text = "Updated" if res.get("updated") else "Unchanged"
-            click.echo(f"✅ Vault '{vault_name}' pushed to server (Version: {res['version']}, Status: {status_text}).")
-            logger.info(f"Vault '{vault_name}' pushed to server: {res}")
+            if res.get("updated"):
+                click.echo(f"✅ Pushed vault '{vault_name}' (version {res['version']}) to server successfully!")
+            else:
+                click.echo(f"ℹ️ Vault '{vault_name}' is already up-to-date on server (version {res['version']}).")
+            logger.info(f"Pushed vault '{vault_name}' to server: {res}")
         except Exception as e:
             click.echo(f"❌ Server push failed: {e}")
             logger.error(f"Server push error: {e}")
@@ -135,34 +204,27 @@ def sync_push(vault_name, target_path, server_url, token, sync_password):
         click.echo("❌ Please specify --to <directory_path> or configure a sync server with 'pacli sync config set'.")
         return
 
+    target_path = os.path.expanduser(target_path)
+    os.makedirs(target_path, exist_ok=True)
+
     if not sync_password:
-        click.echo("Choose a sync password (share this with team members).")
-        pw1 = getpass("Sync password: ")
-        if not pw1:
-            click.echo("❌ Password cannot be empty.")
-            return
-        pw2 = getpass("Confirm sync password: ")
-        if pw1 != pw2:
+        sync_password = getpass("Sync password (used to encrypt the file for transit): ")
+        confirm_pass = getpass("Confirm sync password: ")
+        if sync_password != confirm_pass:
             click.echo("❌ Passwords do not match.")
             return
-        sync_password = pw1
 
+    vm = VaultManager()
     try:
-        vm = VaultManager()
         blob = vm.export_vault_backup(vault_name, sync_password, store.fernet)
-
-        target_path = os.path.expanduser(target_path)
-        os.makedirs(target_path, exist_ok=True)
-
         filename = f"{vault_name}.pacli"
         filepath = os.path.join(target_path, filename)
-
         with open(filepath, "wb") as f:
             f.write(blob)
 
         click.echo(f"✅ Pushed vault '{vault_name}' to: {filepath}")
-        click.echo(f"   Team members can pull with: pacli sync pull {vault_name} --from {target_path}")
-        logger.info(f"Vault '{vault_name}' pushed to {filepath}")
+        click.echo(f"   File size: {len(blob)} bytes (encrypted)")
+        logger.info(f"Vault '{vault_name}' exported to {filepath}")
     except (ValueError, PermissionError) as e:
         click.echo(f"❌ {e}")
     except Exception as e:
@@ -196,68 +258,18 @@ def sync_pull(vault_name, source_path, server_url, token, sync_password, overwri
 
     server_url, token = resolve_server_params(server_url, token)
 
-    # Server mode
     if server_url and not source_path:
         if not token:
             click.echo("❌ Server URL configured but no access token provided.")
             return
-
-        click.echo(f"☁️ Pulling vault '{vault_name}' from {server_url}...")
-        try:
-            blob, meta = pull_from_server(vault_name, server_url, token)
-            if meta.get("not_modified") or blob is None:
-                click.echo("✅ Vault is already up-to-date (no changes on server).")
-                return
-
-            vm = VaultManager()
-            stats = vm.import_vault_backup(vault_name, blob, token, store.fernet, merge=not overwrite)
-
-            v_str = f"v{meta['version']}" if meta.get("version") else ""
-            by_str = f"by {meta['updated_by']}" if meta.get("updated_by") else ""
-            click.echo(
-                f"✅ Pulled vault '{vault_name}' {v_str} {by_str}: "
-                f"{stats['imported']} imported, {stats['skipped']} skipped."
-            )
-            logger.info(f"Pulled vault '{vault_name}' from server: {stats}")
-        except Exception as e:
-            click.echo(f"❌ Server pull failed: {e}")
-            logger.error(f"Server pull error: {e}")
+        _pull_from_server_handler(vault_name, server_url, token, store.fernet, overwrite)
         return
 
-    # Filesystem mode
     if not source_path:
         click.echo("❌ Please specify --from <directory_path> or configure a sync server with 'pacli sync config set'.")
         return
 
-    source_path = os.path.expanduser(source_path)
-    filename = f"{vault_name}.pacli"
-    filepath = os.path.join(source_path, filename)
-
-    if not os.path.exists(filepath):
-        click.echo(f"❌ File not found: {filepath}")
-        click.echo(f"   Expected a file named '{filename}' in {source_path}")
-        return
-
-    if not sync_password:
-        sync_password = getpass("Sync password: ")
-
-    try:
-        with open(filepath, "rb") as f:
-            blob = f.read()
-
-        vm = VaultManager()
-        stats = vm.import_vault_backup(vault_name, blob, sync_password, store.fernet, merge=not overwrite)
-
-        click.echo(
-            f"✅ Pulled vault '{vault_name}': {stats['imported']} imported, "
-            f"{stats['skipped']} skipped, {stats['errors']} errors."
-        )
-        logger.info(f"Vault '{vault_name}' pulled from {filepath}: {stats}")
-    except ValueError as e:
-        click.echo(f"❌ {e}")
-    except Exception as e:
-        click.echo(f"❌ Pull failed: {e}")
-        logger.error(f"Sync pull failed: {e}")
+    _pull_from_filesystem_handler(vault_name, source_path, sync_password, store.fernet, overwrite)
 
 
 @sync.command("status")

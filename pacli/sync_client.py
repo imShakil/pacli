@@ -4,6 +4,7 @@ Client helper functions for syncing with a self-hosted pacli server.
 
 import os
 import json
+import urllib.parse
 import requests  # type: ignore
 from .log import get_logger
 
@@ -60,6 +61,16 @@ def resolve_server_params(server_url: str | None = None, token: str | None = Non
     return res_server, res_token
 
 
+def _build_api_url(server_url: str, endpoint: str, vault_name: str) -> str:
+    """Validate server URL and safely construct API endpoint."""
+    parsed = urllib.parse.urlparse(server_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"Invalid server URL: '{server_url}'. Must start with http:// or https://")
+    clean_vault = urllib.parse.quote(vault_name, safe="")
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}"
+    return f"{base}/api/v1/sync/{endpoint}/{clean_vault}"
+
+
 def push_to_server(vault_name: str, blob_bytes: bytes, server_url: str, token: str, user_name: str = "") -> dict:
     """
     Push encrypted vault blob to the sync server.
@@ -67,7 +78,7 @@ def push_to_server(vault_name: str, blob_bytes: bytes, server_url: str, token: s
     Returns:
         {"version": int, "checksum": str, "updated": bool}
     """
-    url = f"{server_url}/api/v1/sync/push/{vault_name}"
+    url = _build_api_url(server_url, "push", vault_name)
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/octet-stream",
@@ -94,7 +105,7 @@ def pull_from_server(
     Returns:
         (blob_bytes, headers_dict)
     """
-    url = f"{server_url}/api/v1/sync/pull/{vault_name}"
+    url = _build_api_url(server_url, "pull", vault_name)
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -122,7 +133,7 @@ def pull_from_server(
 
 def get_server_status(vault_name: str, server_url: str, token: str) -> dict:
     """Check status of a vault on the sync server."""
-    url = f"{server_url}/api/v1/sync/status/{vault_name}"
+    url = _build_api_url(server_url, "status", vault_name)
     headers = {
         "Authorization": f"Bearer {token}",
     }

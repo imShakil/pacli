@@ -592,12 +592,10 @@ async function saveSecret() {
     } else {
       res = await api('POST', `/api/vaults/${S.currentVault}/secrets`, { label, type, secret });
     }
+  } else if (S.editingId) {
+    res = await api('PUT', `/api/secrets/${S.editingId}`, { secret });
   } else {
-    if (S.editingId) {
-      res = await api('PUT', `/api/secrets/${S.editingId}`, { secret });
-    } else {
-      res = await api('POST', '/api/secrets', { label, type, secret });
-    }
+    res = await api('POST', '/api/secrets', { label, type, secret });
   }
 
   if (res?.success) { closeEditModal(); await loadSecrets(); showToast('✅ Secret saved!'); }
@@ -1270,13 +1268,34 @@ async function loadTeamDetails() {
   // Load members
   const res = await api('GET', `/api/vaults/${S.currentVault}/members`);
   const members = res?.members || [];
-  const listEl = document.getElementById('team-members-list');
 
   const isAdmin = S.myIdentity?.role === 'admin';
   const deleteBtn = document.getElementById('delete-vault-btn');
   if (deleteBtn) deleteBtn.style.display = isAdmin ? 'inline-flex' : 'none';
   const addBtn = document.getElementById('add-member-toggle-btn');
   if (addBtn) addBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+
+  renderTeamMembers(members);
+}
+
+function _renderMemberRoleOptions(currentRole) {
+  const roles = [
+    { value: 'viewer', label: 'Viewer' },
+    { value: 'editor', label: 'Editor' },
+    { value: 'admin', label: 'Admin' },
+  ];
+  return roles
+    .map(r => {
+      const isSelected = r.value === currentRole ? ' selected' : '';
+      return `<option value="${r.value}"${isSelected}>${r.label}</option>`;
+    })
+    .join('');
+}
+
+function renderTeamMembers(members) {
+  const listEl = document.getElementById('team-members-list');
+  if (!listEl) return;
+  const isAdmin = S.myIdentity?.role === 'admin';
 
   if (!members.length) {
     listEl.innerHTML = '<div class="empty-state"><p>No members found.</p></div>';
@@ -1286,6 +1305,11 @@ async function loadTeamDetails() {
   listEl.innerHTML = members.map(m => {
     const isSelf = m.user_id === S.myIdentity?.user_id;
     const dateStr = m.added_at ? new Date(m.added_at * 1000).toLocaleDateString() : '';
+    const actionsHtml = isAdmin && !isSelf
+      ? `<select class="member-role-select" onchange="doChangeMemberRole('${esc(m.user_id)}', this.value)">${_renderMemberRoleOptions(m.role)}</select>
+         <button class="btn btn-danger btn-xs" onclick="doRemoveMember('${esc(m.user_id)}')">Remove</button>`
+      : `<span class="badge badge-vault">${esc(m.role)}</span>`;
+
     return `
       <div class="team-member-card">
         <div class="member-info">
@@ -1293,16 +1317,7 @@ async function loadTeamDetails() {
           <div class="member-id">ID: <code class="inline-code">${esc(m.user_id)}</code> · Added ${dateStr}</div>
         </div>
         <div class="member-actions">
-          ${isAdmin && !isSelf ? `
-            <select class="member-role-select" onchange="doChangeMemberRole('${esc(m.user_id)}', this.value)">
-              <option value="viewer" ${m.role === 'viewer' ? 'selected' : ''}>Viewer</option>
-              <option value="editor" ${m.role === 'editor' ? 'selected' : ''}>Editor</option>
-              <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option>
-            </select>
-            <button class="btn btn-danger btn-xs" onclick="doRemoveMember('${esc(m.user_id)}')">Remove</button>
-          ` : `
-            <span class="badge badge-vault">${esc(m.role)}</span>
-          `}
+          ${actionsHtml}
         </div>
       </div>
     `;

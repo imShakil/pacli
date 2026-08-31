@@ -13,6 +13,7 @@ from ..decorators import master_password_required
 from ..log import get_logger
 
 logger = get_logger("pacli.commands.team")
+NO_IDENTITY_MSG = "❌ No identity set. Run 'pacli team init' first."
 
 
 @click.group()
@@ -43,7 +44,7 @@ def team_whoami():
     """Show your current team identity."""
     identity = get_user_identity()
     if not identity:
-        click.echo("❌ No identity set. Run 'pacli team init' first.")
+        click.echo(NO_IDENTITY_MSG)
         return
     click.echo(f"👤 User ID:   {identity['user_id']}")
     click.echo(f"   Name:      {identity['user_name']}")
@@ -62,7 +63,7 @@ def create_vault(name, description):
     """
     identity = get_user_identity()
     if not identity:
-        click.echo("❌ No identity set. Run 'pacli team init' first.")
+        click.echo(NO_IDENTITY_MSG)
         return
 
     store = SecretStore()
@@ -88,7 +89,7 @@ def list_vaults():
     """List all vaults you have access to."""
     identity = get_user_identity()
     if not identity:
-        click.echo("❌ No identity set. Run 'pacli team init' first.")
+        click.echo(NO_IDENTITY_MSG)
         return
 
     vm = VaultManager()
@@ -212,7 +213,7 @@ def audit_log(vault_name, limit):
     """View the audit trail for a vault."""
     identity = get_user_identity()
     if not identity:
-        click.echo("❌ No identity set. Run 'pacli team init' first.")
+        click.echo(NO_IDENTITY_MSG)
         return
 
     vm = VaultManager()
@@ -245,7 +246,7 @@ def delete_vault_cmd(name):
 
     vm = VaultManager()
     try:
-        vm.delete_vault(name, master_fernet=store.fernet)
+        vm.delete_vault(name)
         click.echo(f"🗑️  Vault '{name}' has been permanently deleted.")
     except (ValueError, PermissionError) as e:
         click.echo(f"❌ {e}")

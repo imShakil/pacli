@@ -26,7 +26,8 @@ def create_app():
     store = SecretStore()
     ssh_manager = SSHConnectionManager()
     vault_manager = VaultManager()
-    socketio = SocketIO(app)
+    socketio = SocketIO()
+    socketio.init_app(app)
 
     _register_csrf_same_origin_protection(app)
     require_auth = _build_require_auth(store)
@@ -699,6 +700,14 @@ def _start_output_streaming(socketio, ssh_manager, connection_id):
 
 def _register_vault_routes(app, store, vault_manager, require_auth):
     """Register all vault/team API endpoints."""
+    _register_vault_crud_routes(app, store, vault_manager, require_auth)
+    _register_vault_secrets_routes(app, store, vault_manager, require_auth)
+    _register_vault_members_routes(app, store, vault_manager, require_auth)
+    _register_vault_audit_routes(app, vault_manager, require_auth)
+
+
+def _register_vault_crud_routes(app, store, vault_manager, require_auth):
+    """Register vault CRUD endpoints."""
 
     @app.route("/api/vaults", methods=["GET"])
     @require_auth
@@ -748,6 +757,10 @@ def _register_vault_routes(app, store, vault_manager, require_auth):
             logger.error(f"Error deleting vault: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
+    """Register vault secrets endpoints."""
+
     @app.route("/api/vaults/<vault_name>/secrets", methods=["GET"])
     @require_auth
     def list_vault_secrets(vault_name):
@@ -763,8 +776,8 @@ def _register_vault_routes(app, store, vault_manager, require_auth):
                             "created_by": s[3],
                             "creation_time": s[4],
                             "update_time": s[5],
-                            "creation_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M") if s[4] else "",
-                            "update_date": datetime.fromtimestamp(s[5]).strftime("%Y-%m-%d %H:%M") if s[5] else "",
+                            "creation_date": (datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M") if s[4] else ""),
+                            "update_date": (datetime.fromtimestamp(s[5]).strftime("%Y-%m-%d %H:%M") if s[5] else ""),
                         }
                         for s in secrets
                     ]
@@ -800,7 +813,7 @@ def _register_vault_routes(app, store, vault_manager, require_auth):
     @require_auth
     def reveal_vault_secret(vault_name, secret_id):
         try:
-            secret = vault_manager.get_secret(vault_name, secret_id, store.fernet)
+            secret = vault_manager.get_secret_by_id(vault_name, secret_id, store.fernet)
             if secret:
                 return jsonify(
                     {
@@ -843,6 +856,10 @@ def _register_vault_routes(app, store, vault_manager, require_auth):
         except Exception as e:
             logger.error(f"Error deleting vault secret: {e}")
             return jsonify({"error": str(e)}), 500
+
+
+def _register_vault_members_routes(app, store, vault_manager, require_auth):
+    """Register vault member management endpoints."""
 
     @app.route("/api/vaults/<vault_name>/members", methods=["GET"])
     @require_auth
@@ -896,6 +913,10 @@ def _register_vault_routes(app, store, vault_manager, require_auth):
             return jsonify({"error": str(e)}), 403
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+
+def _register_vault_audit_routes(app, vault_manager, require_auth):
+    """Register vault audit and identity endpoints."""
 
     @app.route("/api/vaults/<vault_name>/audit", methods=["GET"])
     @require_auth

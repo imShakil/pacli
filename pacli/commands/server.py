@@ -50,6 +50,11 @@ def _clean_stale_pid():
             pass
 
 
+def _format_server_url(host: str, port: int) -> str:
+    scheme = "https" if port in (443, 8443) else "http"
+    return f"{scheme}://{host}:{port}"
+
+
 def _write_state(pid, host, port):
     os.makedirs(SERVER_DIR, exist_ok=True)
     with open(SERVER_PID_PATH, "w") as f:
@@ -58,7 +63,7 @@ def _write_state(pid, host, port):
         "pid": pid,
         "host": host,
         "port": port,
-        "url": f"http://{host}:{port}",
+        "url": _format_server_url(host, port),
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     with open(SERVER_STATE_PATH, "w") as f:
@@ -99,7 +104,7 @@ def server_start(host, port, daemon):
     pid = _get_pid_from_file()
     if pid and _is_pid_running(pid):
         state = _read_state() or {}
-        url = state.get("url", f"http://{host}:{port}")
+        url = state.get("url", _format_server_url(host, port))
         click.echo(f"⚠️ Sync server is already running (PID: {pid}) at {url}")
         return
 
@@ -127,11 +132,11 @@ def server_start(host, port, daemon):
             return
 
         click.echo(f"🚀 Sync server started in background (PID: {proc.pid})")
-        click.echo(f"   URL:  http://{host}:{port}")
+        click.echo(f"   URL:  {_format_server_url(host, port)}")
         click.echo(f"   Logs: {SERVER_LOG_PATH}")
         click.echo("\n💡 Create a team token with: pacli server token create --name 'DevTeam'")
     else:
-        click.echo(f"🚀 Starting pacli sync server on http://{host}:{port}")
+        click.echo(f"🚀 Starting pacli sync server on {_format_server_url(host, port)}")
         click.echo("   Press Ctrl+C to stop.")
         _write_state(os.getpid(), host, port)
         try:

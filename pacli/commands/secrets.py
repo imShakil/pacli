@@ -10,6 +10,7 @@ from ..ssh_utils import suggest_ssh_hosts
 
 logger = get_logger("pacli.commands.secrets")
 NO_SELECTION_MSG = "❌ No valid selection made. Aborting."
+SECRET_UPDATED_MSG = "✅ Updated secret successfully!"
 
 
 def _detect_secret_type(secret_type, arg1, arg2):
@@ -340,7 +341,7 @@ def update(label, vault_name):
             new_secret = getpass(f"Enter updated secret for {label}:")
         try:
             vm.update_secret(vault_name, selected["id"], new_secret, store.fernet)
-            click.echo("✅ Updated secret successfully!")
+            click.echo(SECRET_UPDATED_MSG)
         except (PermissionError, ValueError) as e:
             click.echo(f"❌ {e}")
         return
@@ -364,7 +365,7 @@ def update(label, vault_name):
         new_secret = getpass(f"Enter updated secret for {label} with {secret_id}:")
     try:
         store.update_secret(secret_id, new_secret)
-        click.echo("✅ Updated secret successfully!")
+        click.echo(SECRET_UPDATED_MSG)
         logger.info(f"Secreted update for {label} with ID: {secret_id}")
     except Exception as e:
         click.echo(f"❌ couldn't able to update due to {e}")
@@ -388,7 +389,7 @@ def update_by_id(secret_id):
         new_secret = getpass("Enter updated secret: ")
     try:
         store.update_secret(secret_id, new_secret)
-        click.echo("✅ Updated secret successfully!")
+        click.echo(SECRET_UPDATED_MSG)
         logger.info(f"Secreted update with ID: {secret_id}")
     except Exception as e:
         click.echo(f"❌ couldn't able to update due to {e}")

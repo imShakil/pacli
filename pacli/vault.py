@@ -131,6 +131,22 @@ class VaultManager:
         with open(REGISTRY_PATH, "w") as f:
             json.dump(self._registry, f, indent=2)
 
+    def _validate_vault_name(self, name: str) -> str:
+        """Validate vault name format and prevent directory traversal."""
+        clean = os.path.basename(str(name).strip())
+        if not clean or clean != name.strip():
+            raise ValueError(f"Invalid vault name: '{name}'. Cannot contain path separators.")
+        return clean
+
+    def _get_vault_dir(self, vault_name: str) -> str:
+        """Securely get absolute path to vault directory."""
+        clean = self._validate_vault_name(vault_name)
+        base = os.path.abspath(VAULTS_DIR)
+        path = os.path.abspath(os.path.join(base, clean))
+        if not path.startswith(base):
+            raise ValueError("Path traversal attempt detected.")
+        return path
+
     # ------------------------------------------------------------------
     # Vault CRUD
     # ------------------------------------------------------------------
@@ -284,13 +300,12 @@ class VaultManager:
         """Get vault metadata by name."""
         return self._registry["vaults"].get(name)
 
-    def delete_vault(self, name: str, master_fernet: Fernet | None = None):
+    def delete_vault(self, name: str):
         """
         Delete a vault and all its data.
 
         Args:
             name: Vault name
-            master_fernet: Caller's Fernet (to verify admin access)
 
         Raises:
             ValueError: If vault doesn't exist
@@ -301,7 +316,7 @@ class VaultManager:
 
         self._check_permission(name, "delete_vault")
 
-        vault_dir = os.path.join(VAULTS_DIR, name)
+        vault_dir = self._get_vault_dir(name)
         import shutil
 
         if os.path.exists(vault_dir):
@@ -328,10 +343,11 @@ class VaultManager:
             master_fernet: The user's personal Fernet instance
 
         Returns:
-            The vault's Fernet instance
+            The vault's symmetric Fernet instance
 
         Raises:
-            ValueError: If vault not found or user not a member
+            ValueError: If vault doesn't exist
+            PermissionError: If user is not a member of this vault
         """
         if name in self._vault_fernets:
             return self._vault_fernets[name]
@@ -341,12 +357,17 @@ class VaultManager:
 
         identity = get_user_identity()
         if not identity:
-            raise RuntimeError("User identity not set")
+            raise PermissionError("No user identity configured. Run 'pacli team init' first.")
 
-        vault_dir = os.path.join(VAULTS_DIR, name)
+        user_id = identity["user_id"]
+        vault_dir = self._get_vault_dir(name)
         db_path = os.path.join(vault_dir, "vault.db")
+
+        if not os.path.exists(db_path):
+            raise ValueError(f"Vault database for '{name}' not found")
+
         conn = sqlite3.connect(db_path)
-        row = conn.execute("SELECT wrapped_key FROM members WHERE user_id = ?", (identity["user_id"],)).fetchone()
+        row = conn.execute("SELECT wrapped_key FROM members WHERE user_id = ?", (user_id,)).fetchone()
         conn.close()
 
         if not row:
@@ -354,38 +375,88 @@ class VaultManager:
 
         wrapped_key = row[0]
         if isinstance(wrapped_key, str):
-            wrapped_key = wrapped_key.encode()
+            wrapped_key_bytes = wrapped_key.encode()
+        else:
+            wrapped_key_bytes = bytes(wrapped_key)
 
-        # Unwrap the vault key using the user's master Fernet
-        vault_key = master_fernet.decrypt(wrapped_key)
-        vault_fernet = Fernet(vault_key)
+        try:
+            raw_vault_key = master_fernet.decrypt(wrapped_key_bytes)
+        except Exception:
+            raise PermissionError("Failed to unwrap vault key. Incorrect master password.")
 
+        vault_fernet = Fernet(raw_vault_key)
         self._vault_fernets[name] = vault_fernet
         return vault_fernet
 
+    def get_raw_vault_key(self, name: str, master_fernet: Fernet) -> bytes:
+        """Get the raw 32-byte symmetric key for a vault."""
+        identity = get_user_identity()
+        if not identity:
+            raise PermissionError("No user identity configured")
+        user_id = identity["user_id"]
+        vault_dir = self._get_vault_dir(name)
+        db_path = os.path.join(vault_dir, "vault.db")
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute("SELECT wrapped_key FROM members WHERE user_id = ?", (user_id,)).fetchone()
+        conn.close()
+
+        if not row:
+            raise PermissionError(f"You are not a member of vault '{name}'")
+
+        wrapped_key = row[0]
+        if isinstance(wrapped_key, str):
+            wrapped_key_bytes = wrapped_key.encode()
+        else:
+            wrapped_key_bytes = bytes(wrapped_key)
+
+        return master_fernet.decrypt(wrapped_key_bytes)
+
     # ------------------------------------------------------------------
-    # Member Management
+    # Membership & RBAC
     # ------------------------------------------------------------------
 
-    def add_member(self, vault_name: str, target_user_id: str, target_user_name: str, role: str, master_fernet: Fernet):
+    def _check_permission(self, vault_name: str, action: str):
+        """Verify the current user has permission to perform an action."""
+        identity = get_user_identity()
+        if not identity:
+            raise PermissionError("No user identity configured. Run 'pacli team init' first.")
+
+        user_id = identity["user_id"]
+        vault_dir = self._get_vault_dir(vault_name)
+        db_path = os.path.join(vault_dir, "vault.db")
+
+        if not os.path.exists(db_path):
+            raise ValueError(f"Vault '{vault_name}' not found")
+
+        conn = sqlite3.connect(db_path)
+        row = conn.execute("SELECT role FROM members WHERE user_id = ?", (user_id,)).fetchone()
+        conn.close()
+
+        if not row:
+            raise PermissionError(f"You are not a member of vault '{vault_name}'")
+
+        role = VaultRole(row[0])
+        if action not in ROLE_PERMISSIONS.get(role, set()):
+            raise PermissionError(f"Role '{role.value}' does not have permission to '{action}'")
+
+    def add_member(
+        self,
+        vault_name: str,
+        target_user_id: str,
+        target_user_name: str,
+        role: str,
+        master_fernet: Fernet,
+    ):
         """
-        Add a member to a vault.
-
-        The vault key is unwrapped with the adder's master key, then re-wrapped
-        with... well, for local-first, the adder provides the wrapped key.
-        In practice, the new member would need to exchange keys out-of-band.
-
-        For local-first simplicity, the wrapped key is stored as the raw vault key
-        encrypted with the VAULT's own Fernet — the new member will need to
-        receive the vault key material through a secure channel (e.g., exported
-        vault bundle).
+        Add a new member to a vault, wrapping the vault key for them.
 
         Args:
-            vault_name: Name of the vault
-            target_user_id: User ID to add
-            target_user_name: Display name for the user
-            role: One of viewer, editor, admin
-            master_fernet: The adder's personal Fernet (to unwrap vault key)
+            vault_name: Vault name
+            target_user_id: The member's user ID
+            target_user_name: Display name for the member
+            role: 'viewer', 'editor', or 'admin'
+            master_fernet: Adder's master Fernet to unlock the vault key
         """
         self._check_permission(vault_name, "add_member")
 
@@ -395,7 +466,7 @@ class VaultManager:
         self.unlock_vault(vault_name, master_fernet)
 
         # Get the raw vault key from adder's wrapped copy
-        vault_dir = os.path.join(VAULTS_DIR, vault_name)
+        vault_dir = self._get_vault_dir(vault_name)
         identity = get_user_identity()
         db_path = os.path.join(vault_dir, "vault.db")
         conn = sqlite3.connect(db_path)
@@ -406,19 +477,15 @@ class VaultManager:
             conn.close()
             raise ValueError(f"User '{target_user_id}' is already a member of vault '{vault_name}'")
 
-        # For local-first sharing: wrap the vault key with the adder's master key
-        # (the new member will receive the vault bundle and re-wrap with their own key)
-        adder_wrapped = conn.execute(
-            "SELECT wrapped_key FROM members WHERE user_id = ?", (identity["user_id"],)
-        ).fetchone()
-        if not adder_wrapped:
-            conn.close()
-            raise PermissionError("Cannot find your vault key")
+        raw_vault_key = self.get_raw_vault_key(vault_name, master_fernet)
 
-        # Store with the same wrapped key — new member will re-wrap on import
+        # Wrap the key for the new member (for now, using same key since we don't have their master pass)
+        wrapped_for_member = master_fernet.encrypt(raw_vault_key)
+
+        now = int(time.time())
         conn.execute(
-            "INSERT INTO members (user_id, user_name, role, wrapped_key, added_at) VALUES (?, ?, ?, ?, ?)",
-            (target_user_id, target_user_name, role, adder_wrapped[0], int(time.time())),
+            "INSERT INTO members (user_id, user_name, role, wrapped_key, added_at) " "VALUES (?, ?, ?, ?, ?)",
+            (target_user_id, target_user_name, role, wrapped_for_member, now),
         )
         conn.commit()
         conn.close()
@@ -428,9 +495,9 @@ class VaultManager:
             identity["user_id"],
             "add_member",
             target_user_id,
-            f"Added {target_user_name} ({target_user_id}) as {role}",
+            f"Added {target_user_name} as {role}",
         )
-        logger.info(f"Added {target_user_id} to vault '{vault_name}' as {role}")
+        logger.info(f"Added member {target_user_name} ({target_user_id}) to vault '{vault_name}' as {role}")
 
     def remove_member(self, vault_name: str, target_user_id: str):
         """Remove a member from a vault."""
@@ -440,33 +507,45 @@ class VaultManager:
         if target_user_id == identity["user_id"]:
             raise ValueError("Cannot remove yourself from the vault")
 
-        vault_dir = os.path.join(VAULTS_DIR, vault_name)
+        vault_dir = self._get_vault_dir(vault_name)
         db_path = os.path.join(vault_dir, "vault.db")
         conn = sqlite3.connect(db_path)
-        conn.execute("DELETE FROM members WHERE user_id = ?", (target_user_id,))
+
+        cursor = conn.execute("DELETE FROM members WHERE user_id = ?", (target_user_id,))
         conn.commit()
         conn.close()
 
+        if cursor.rowcount == 0:
+            raise ValueError(f"User '{target_user_id}' is not a member of vault '{vault_name}'")
+
         self._log_audit(
-            vault_name, identity["user_id"], "remove_member", target_user_id, f"Removed user {target_user_id}"
+            vault_name,
+            identity["user_id"],
+            "remove_member",
+            target_user_id,
+            f"Removed user {target_user_id}",
         )
-        logger.info(f"Removed {target_user_id} from vault '{vault_name}'")
+        logger.info(f"Removed member {target_user_id} from vault '{vault_name}'")
 
     def set_member_role(self, vault_name: str, target_user_id: str, new_role: str):
         """Change a member's role in a vault."""
         self._check_permission(vault_name, "set_role")
 
         if new_role not in [r.value for r in VaultRole]:
-            raise ValueError(f"Invalid role: {new_role}")
+            raise ValueError(f"Invalid role: {new_role}. Must be one of: viewer, editor, admin")
 
-        identity = get_user_identity()
-        vault_dir = os.path.join(VAULTS_DIR, vault_name)
+        vault_dir = self._get_vault_dir(vault_name)
         db_path = os.path.join(vault_dir, "vault.db")
         conn = sqlite3.connect(db_path)
-        conn.execute("UPDATE members SET role = ? WHERE user_id = ?", (new_role, target_user_id))
+
+        cursor = conn.execute("UPDATE members SET role = ? WHERE user_id = ?", (new_role, target_user_id))
         conn.commit()
         conn.close()
 
+        if cursor.rowcount == 0:
+            raise ValueError(f"User '{target_user_id}' is not a member of vault '{vault_name}'")
+
+        identity = get_user_identity()
         self._log_audit(
             vault_name,
             identity["user_id"],
@@ -477,7 +556,7 @@ class VaultManager:
 
     def list_members(self, vault_name: str) -> list[dict]:
         """List all members of a vault."""
-        vault_dir = os.path.join(VAULTS_DIR, vault_name)
+        vault_dir = self._get_vault_dir(vault_name)
         db_path = os.path.join(vault_dir, "vault.db")
         if not os.path.exists(db_path):
             return []
@@ -494,7 +573,7 @@ class VaultManager:
         """Get a thread-local connection to a vault's database."""
         attr = f"vault_conn_{vault_name}"
         if not hasattr(self._local, attr) or getattr(self._local, attr) is None:
-            vault_dir = os.path.join(VAULTS_DIR, vault_name)
+            vault_dir = self._get_vault_dir(vault_name)
             db_path = os.path.join(vault_dir, "vault.db")
             setattr(self._local, attr, sqlite3.connect(db_path, check_same_thread=False))
         return getattr(self._local, attr)
@@ -513,12 +592,19 @@ class VaultManager:
         conn.execute(
             "INSERT INTO secrets (id, label, value_encrypted, type, created_by, creation_time, update_time) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (new_id, label, encrypted, secret_type, identity["user_id"], now, now),
+            (new_id, label, encrypted, secret_type, identity.get("user_id", ""), now, now),
         )
         conn.commit()
 
-        self._log_audit(vault_name, identity["user_id"], "create", new_id, f"Created secret '{label}'")
+        self._log_audit(
+            vault_name,
+            identity.get("user_id", ""),
+            "create",
+            new_id,
+            f"Created secret '{label}'",
+        )
         logger.info(f"Secret '{label}' saved to vault '{vault_name}'")
+        return new_id
 
     def get_secret(self, vault_name: str, secret_id: str, master_fernet: Fernet) -> dict | None:
         """Get a secret from a vault by ID."""
@@ -538,7 +624,7 @@ class VaultManager:
         try:
             value = vault_fernet.decrypt(row[2].encode()).decode()
         except Exception as e:
-            logger.error(f"Decryption failed for vault secret {secret_id}: {e}")
+            logger.error("Decryption failed for vault secret %s: %s", secret_id, e)
             return None
 
         identity = get_user_identity()
@@ -554,6 +640,10 @@ class VaultManager:
             "update_time": row[6],
         }
 
+    def get_secret_by_id(self, vault_name: str, secret_id: str, master_fernet: Fernet) -> dict | None:
+        """Alias for get_secret."""
+        return self.get_secret(vault_name, secret_id, master_fernet)
+
     def list_secrets(self, vault_name: str) -> list[tuple]:
         """List all secrets in a vault (without decrypting values)."""
         self._check_permission(vault_name, "list_secrets")
@@ -561,65 +651,84 @@ class VaultManager:
         conn = self._get_vault_conn(vault_name)
         return [
             (row[0], row[1], row[2], row[3], row[4], row[5])
-            for row in conn.execute("SELECT id, label, type, created_by, creation_time, update_time FROM secrets")
+            for row in conn.execute(
+                "SELECT id, label, type, created_by, creation_time, update_time "
+                "FROM secrets ORDER BY creation_time DESC"
+            )
         ]
 
     def update_secret(self, vault_name: str, secret_id: str, new_value: str, master_fernet: Fernet):
-        """Update a secret's value in a vault."""
+        """Update an existing secret in a vault."""
         self._check_permission(vault_name, "update_secret")
         vault_fernet = self.unlock_vault(vault_name, master_fernet)
 
-        identity = get_user_identity()
         encrypted = vault_fernet.encrypt(new_value.encode()).decode()
         now = int(time.time())
 
         conn = self._get_vault_conn(vault_name)
-        conn.execute(
+        cursor = conn.execute(
             "UPDATE secrets SET value_encrypted = ?, update_time = ? WHERE id = ?",
             (encrypted, now, secret_id),
         )
         conn.commit()
 
-        self._log_audit(vault_name, identity["user_id"], "update", secret_id, "Updated secret value")
-
-    def delete_secret(self, vault_name: str, secret_id: str):
-        """Delete a secret from a vault."""
-        self._check_permission(vault_name, "delete_secret")
+        if cursor.rowcount == 0:
+            raise ValueError(f"Secret with ID '{secret_id}' not found in vault '{vault_name}'")
 
         identity = get_user_identity()
+        self._log_audit(vault_name, identity.get("user_id", ""), "update", secret_id, "Updated secret value")
+        logger.info(f"Secret {secret_id} updated in vault '{vault_name}'")
+
+    def delete_secret(self, vault_name: str, secret_id: str):
+        """Delete a secret by ID from a vault."""
+        self._check_permission(vault_name, "delete_secret")
+
         conn = self._get_vault_conn(vault_name)
-        conn.execute("DELETE FROM secrets WHERE id = ?", (secret_id,))
+        cursor = conn.execute("DELETE FROM secrets WHERE id = ?", (secret_id,))
         conn.commit()
 
-        self._log_audit(vault_name, identity["user_id"], "delete", secret_id, "Deleted secret")
+        if cursor.rowcount == 0:
+            raise ValueError(f"Secret with ID '{secret_id}' not found in vault '{vault_name}'")
+
+        identity = get_user_identity()
+        self._log_audit(vault_name, identity.get("user_id", ""), "delete", secret_id, "Deleted secret")
+        logger.info(f"Secret {secret_id} deleted from vault '{vault_name}'")
 
     def get_secrets_by_label(self, vault_name: str, label: str, master_fernet: Fernet) -> list[dict]:
-        """Get all secrets matching a label from a vault."""
+        """Retrieve secrets matching label from a vault."""
         self._check_permission(vault_name, "get_secret")
         vault_fernet = self.unlock_vault(vault_name, master_fernet)
 
         conn = self._get_vault_conn(vault_name)
-        results = []
-        for row in conn.execute(
-            "SELECT id, value_encrypted, type, created_by, creation_time, update_time "
+        rows = conn.execute(
+            "SELECT id, label, value_encrypted, type, created_by, creation_time, update_time "
             "FROM secrets WHERE label = ? ORDER BY creation_time DESC",
             (label,),
-        ):
+        ).fetchall()
+
+        identity = get_user_identity()
+        results = []
+        for r in rows:
             try:
-                value = vault_fernet.decrypt(row[1].encode()).decode()
+                decrypted = vault_fernet.decrypt(r[2].encode()).decode()
             except Exception as e:
-                logger.error(f"Decryption failed for vault secret {row[0]}: {e}")
-                value = None
+                logger.error("Failed to decrypt secret in vault: %s", e)
+                decrypted = None
             results.append(
                 {
-                    "id": row[0],
-                    "secret": value,
-                    "type": row[2],
-                    "created_by": row[3],
-                    "creation_time": row[4],
-                    "update_time": row[5],
+                    "id": r[0],
+                    "label": r[1],
+                    "secret": decrypted,
+                    "type": r[3],
+                    "created_by": r[4],
+                    "creation_time": r[5],
+                    "update_time": r[6],
                 }
             )
+
+        if results and results[0]["secret"] is not None:
+            self._log_audit(vault_name, identity.get("user_id", ""), "read", results[0]["id"], f"Read secret '{label}'")
+
         return results
 
     # ------------------------------------------------------------------
@@ -637,7 +746,7 @@ class VaultManager:
             )
             conn.commit()
         except Exception as e:
-            logger.error(f"Failed to write audit log for vault '{vault_name}': {e}")
+            logger.error("Failed to write audit log: %s", e)
 
     def get_audit_log(self, vault_name: str, limit: int = 50) -> list[dict]:
         """Retrieve audit log entries for a vault."""
@@ -661,37 +770,6 @@ class VaultManager:
             }
             for r in rows
         ]
-
-    # ------------------------------------------------------------------
-    # Permission Checks
-    # ------------------------------------------------------------------
-
-    def _check_permission(self, vault_name: str, action: str):
-        """
-        Verify the current user has permission for the given action on the vault.
-
-        Raises:
-            PermissionError: If user lacks the required role
-        """
-        identity = get_user_identity()
-        if not identity:
-            raise RuntimeError("User identity not set. Run 'pacli team init' first.")
-
-        vault_dir = os.path.join(VAULTS_DIR, vault_name)
-        db_path = os.path.join(vault_dir, "vault.db")
-        if not os.path.exists(db_path):
-            raise ValueError(f"Vault '{vault_name}' not found")
-
-        conn = sqlite3.connect(db_path)
-        row = conn.execute("SELECT role FROM members WHERE user_id = ?", (identity["user_id"],)).fetchone()
-        conn.close()
-
-        if not row:
-            raise PermissionError(f"You are not a member of vault '{vault_name}'")
-
-        role = VaultRole(row[0])
-        if action not in ROLE_PERMISSIONS.get(role, set()):
-            raise PermissionError(f"Role '{role.value}' does not have permission to '{action}'")
 
     # ------------------------------------------------------------------
     # Vault Backup / Restore (Phase 2)

@@ -228,8 +228,8 @@ def create_sync_server_app(db: SyncServerDB | None = None) -> Flask:
             token = ""
             if auth_header.startswith("Bearer "):
                 token = auth_header[7:].strip()
-            elif "X-Pacli-Token" in request.headers:
-                token = request.headers["X-Pacli-Token"].strip()
+            elif request.headers.get("X-Pacli-Token"):
+                token = request.headers.get("X-Pacli-Token", "").strip()
 
             if not token:
                 return jsonify({"error": "Unauthorized — Bearer token required"}), 401
