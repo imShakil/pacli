@@ -1,4 +1,4 @@
-# 🔐 pacli - Secrets Management CLI
+# 🔐 pacli - Secrets Management CLI & Team Vaults
 
 ___
 
@@ -12,22 +12,25 @@ ___
 [![security:bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/imShakil/pacli)
 ![Badge](https://hitscounter.dev/api/hit?url=https%3A%2F%2Fgithub.com%2FimShakil%2Fpacli&label=&icon=github&color=%23198754&message=&style=flat&tz=UTC)
 
-pacli is a secure, local-first secrets manager that stores your passwords, API keys, and SSH credentials with encryption and master password protection - no cloud dependencies required.
+**pacli** is a secure, local-first secrets manager and team vault system designed for developers and DevOps teams. Store, retrieve, sync, and share passwords, API tokens, and SSH credentials with strong cryptography, master password verification, role-based permissions, and zero-knowledge synchronization.
 
-## Features
+---
 
-- Securely store and manage secrets locally
-- Master password protection
-- Support separate options for token, password, and SSH connections
-- Add, retrieve, update, and delete secrets
-- Copy secrets directly to your clipboard
-- SSH connection management with key file support
-- URL shortening with [LinklyHQ](https://linklyhq.com/?via=ShakilOps) integration
-- Export list of secrets into JSON or CSV file
-- Easy-to-use command-line interface
-- **Web UI** for managing secrets through a modern web interface
+## 🌟 Key Features
 
-## Sonarqube Code Quality Metrics
+- 🔒 **Local-First & Zero-Knowledge**: Secrets are encrypted at rest with PBKDF2-HMAC-SHA256 and Fernet (AES-128-CBC + HMAC). Plaintext never touches the network unencrypted.
+- 👥 **Team Vaults & RBAC**: Create isolated team vaults (`dev-infra`, `prod-keys`) with granular roles (`viewer`, `editor`, `admin`) and encrypted key-wrapping per member.
+- 🔄 **Multi-Target Vault Sync**: Push and pull encrypted vault bundles across team members using a shared directory (Dropbox, Google Drive, NAS, Git) or via the built-in self-hosted server.
+- 🖥️ **Self-Hosted Zero-Knowledge Relay Server**: Run your own team sync server (`pacli server start`) with token authentication and audit logging. The server never has access to encryption keys or secrets.
+- 📦 **Encrypted Backups**: Export and import full encrypted vault backups with master password protection.
+- 💻 **Modern Web UI**: Interactive browser dashboard (`pacli web`) featuring a Vault Switcher, Secrets CRUD, Team Member Management, Audit Log Viewer, and an in-browser SSH Terminal.
+- 🔑 **SSH Key Management**: Store and auto-connect to SSH servers using credentials or key files.
+- 📋 **Clipboard & Pipeline Integration**: Copy secrets directly to clipboard (`--clip`) or pipe command outputs (`pacli cc`).
+- 🔗 **LinklyHQ URL Shortening**: Built-in shortlink generator with click tracking.
+
+---
+
+## 📊 Code Quality & Security
 
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
@@ -35,252 +38,222 @@ pacli is a secure, local-first secrets manager that stores your passwords, API k
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
-[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=imShakil_pacli&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=imShakil_pacli)
 
-## Installation
+---
 
-### Recommended: pipx (isolated, no conflicts)
+## 🚀 Installation
 
-[pipx](https://pipx.pypa.io/) installs CLI tools in their own isolated environments and makes them available system-wide. This is the safest and cleanest approach.
-
+### Recommended: pipx (isolated environment)
 ```sh
-# Install pipx if you don't have it
 pip install pipx
 pipx ensurepath
-
-# Install pacli
 pipx install pacli-tool
 ```
 
 ### Standard pip
-
 ```sh
 pip install pacli-tool
 ```
 
-> **Note for Ubuntu 23+, Debian 12+, and other modern Linux distros:** Your system Python may be externally managed (PEP 668) and block pip installs by default. Use one of the alternatives below.
-
-### Modern Linux (externally managed Python)
-
-If you get an `externally-managed-environment` error, choose one of these:
-
-```sh
-# Use a virtual environment (safest for system Python)
-python3 -m venv ~/.venv/pacli
-~/.venv/pacli/bin/pip install pacli-tool
-
-# Then add the binary to your PATH
-echo 'export PATH="$HOME/.venv/pacli/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
 ### Install from source
-
 ```sh
 git clone https://github.com/imshakil/pacli.git
 cd pacli
 pip install -e .
 ```
 
-Or directly from GitHub without cloning:
-
+Verify installation:
 ```sh
-pip install git+https://github.com/imshakil/pacli.git
-```
-
-### Verify installation
-
-```sh
+pacli version
 pacli --help
 ```
 
-## Usage
+---
 
-To see all available commands and options:
+## 📖 Command Reference
 
+| Command / Group | Description |
+|---|---|
+| `init` | Set or reset your master password |
+| `add` | Add a secret (`--pass`, `--token`, `--ssh`) with optional `--vault` |
+| `get` / `get-by-id` | Retrieve secrets by label or ID (`--clip` to copy) |
+| `list` | List all saved secrets (supports `--vault`) |
+| `update` / `update-by-id` | Update an existing secret value |
+| `delete` / `delete-by-id` | Delete a secret |
+| `team` | 👥 Team vault management (create vaults, add members, audit log) |
+| `sync` | 🔄 Sync encrypted vaults with a team relay server or shared directory |
+| `server` | 🖥️ Start, stop, and manage the self-hosted zero-knowledge sync server |
+| `backup` | 📦 Encrypted backup export and import across machines |
+| `web` | 🌐 Launch or manage the local Web UI dashboard |
+| `ssh` | Connect to an SSH server using saved credentials |
+| `export` | Export secrets to unencrypted JSON or CSV |
+| `short` | Shorten URLs via LinklyHQ |
+| `cc` | Copy stdin / pipeline output to clipboard |
+| `change-master-key` | Re-encrypt all secrets with a new master password |
+| `version` | Show pacli version and project details |
+
+---
+
+## 👥 Team Vaults & Collaboration
+
+### 1. Initialize Your Team Identity
+Each team member initializes their identity once:
 ```sh
-pacli --help
+pacli team init
+# Enter display name: Alice
+# ✅ Identity set! User ID: d164fe8724cb
 ```
 
-### Common Commands
-
-| Command                | Description                                      |
-|------------------------|--------------------------------------------------|
-| `init`                 | Initialize pacli and set a master password       |
-| `add`                  | Add a secret with a label                        |
-| `get`                  | Retrieve secrets by label                        |
-| `get-by-id`            | Retrieve a secret by its ID                      |
-| `update`               | Update old secret by label                       |
-| `update-by-id`         | Update old secret by its ID                      |
-| `list`                 | List all saved secrets                           |
-| `delete`               | Delete a secret by label                         |
-| `delete-by-id`         | Delete a secret by its ID                        |
-| `ssh`                  | Connect to SSH server using saved credentials    |
-| `short`                | Shorten URLs using LinklyHQ service              |
-| `cc`                   | Copy stdin content to clipboard                  |
-| `change-master-key`    | Change the master password without losing data   |
-| `export`               | Export secrets to JSON or CSV format             |
-| `web`                  | Launch/manage the Web UI for managing secrets    |
-| `version`              | Show the current version of pacli                |
-
-### Examples
-
-#### Adding and Retrieving Secrets
-
+To see your identity anytime:
 ```sh
-# Initialize pacli (run once)
-pacli init
-
-# Add a password
-pacli add --pass github
-
-# Add a token
-pacli add --token api-key
-
-# Add SSH connection
-pacli add --ssh ec2-vm user:192.168.1.100
-
-# Add SSH connection with key file
-pacli add --ssh ec2-vm user:192.168.1.100 --key ~/.ssh/id_rsa
-
-# Retrieve a secret
-pacli get github
-
-# Connect via SSH
-pacli ssh ec2-vm
-
-# Export secrets to JSON
-pacli export --format json --output my_secrets.json
-
-# Export secrets to CSV
-pacli export --format csv --output my_secrets.csv
-
-# Shorten a URL
-pacli short https://example.com/very/long/url
-
-# Shorten with custom name and copy to clipboard
-pacli short https://example.com -n "My Link" --clip
-
-# Copy file content to clipboard
-cat file.txt | pacli cc
-
-# Copy command output to clipboard
-echo "Hello World" | pacli cc
-
-# Copy API response to clipboard
-curl -s https://api.example.com/data | pacli cc
+pacli team whoami
 ```
 
-## Web UI
-
-[![Web UI](https://mhosen.com/projects/pacli/pacli-web-ui.png)](https://mhosen.com/projects/pacli---secrets-management-cli)
-
-### Redesigned UI (1.4.0+)
-
-<img width="1512" height="771" alt="Screenshot 2026-04-25 at 21 26 34" src="https://github.com/user-attachments/assets/af509b71-582e-4456-9032-d1fa67ba0eee" />
-
-
-Launch the Web UI to manage your secrets through a modern, user-friendly interface:
-
+### 2. Create a Team Vault
 ```sh
-# Start the Web UI (opens in your default browser)
+pacli team create-vault dev-infra -d "Backend infrastructure & database credentials"
+```
+
+### 3. Add Teammates to the Vault
+Add members using their unique User ID:
+```sh
+# Add Bob as an editor
+pacli team add-member dev-infra a8f910e1234 --name "Bob" --role editor
+
+# Add Charlie as a read-only viewer
+pacli team add-member dev-infra b7c821f9876 --name "Charlie" --role viewer
+```
+
+Available roles:
+- `viewer`: Read secrets in the vault
+- `editor`: Read, add, update, and delete secrets
+- `admin`: Full control (manage members, roles, audit log, delete vault)
+
+### 4. Working with Secrets in Team Vaults
+Simply pass `--vault <name>` or `-v <name>` to any secret command:
+```sh
+# Add a secret to the team vault
+pacli add --vault dev-infra --password postgres_db postgres db_pass_secret
+pacli add --vault dev-infra --token stripe_key sk_test_12345
+
+# List secrets in the team vault
+pacli list --vault dev-infra
+
+# Retrieve a secret from the vault
+pacli get --vault dev-infra postgres_db --clip
+
+# View immutable audit log of actions taken in the vault
+pacli team audit-log dev-infra
+```
+
+---
+
+## 🔄 Syncing Vaults Across the Team
+
+### Option A: Self-Hosted Zero-Knowledge Relay Server
+
+#### 1. Start the Sync Server (DevOps / Admin)
+Run on any Linux server, VPS, or cloud container:
+```sh
+# Start the server daemon on port 58380
+pacli server start --host 0.0.0.0 --port 58380 --daemon
+
+# Generate a team token
+pacli server token create --name "DevTeam" --role admin
+```
+
+#### 2. Configure Team Members
+Each team member configures their client once:
+```sh
+pacli sync config set --server http://secrets.mycompany.internal:58380 --token pacli_tok_...
+```
+
+#### 3. Push and Pull Updates
+```sh
+# Push local vault updates to the server
+pacli sync push dev-infra
+
+# Check status of remote vault
+pacli sync status dev-infra
+
+# Pull and merge latest changes from the server
+pacli sync pull dev-infra
+```
+
+---
+
+### Option B: Offline / Shared Directory Sync (No Server)
+
+You can also sync encrypted `.pacli` bundles through **Dropbox, Google Drive, NAS, or Git**:
+```sh
+# Push encrypted bundle to shared directory
+pacli sync push dev-infra --to ~/Dropbox/TeamSecrets/
+
+# Pull and merge from shared directory
+pacli sync pull dev-infra --from ~/Dropbox/TeamSecrets/
+```
+
+---
+
+## 📦 Encrypted Backups
+
+Export and import encrypted backup archives of personal or team vaults:
+```sh
+# Backup personal store
+pacli backup export --output ~/pacli_backup.enc
+
+# Backup a specific team vault
+pacli backup export --vault dev-infra --output ~/dev_infra_backup.enc
+
+# Restore backup
+pacli backup import ~/dev_infra_backup.enc --vault dev-infra
+```
+
+---
+
+## 🌐 Web UI
+
+Launch the modern browser-based UI:
+```sh
+# Start and open in default browser
 pacli web
 
-# Start in background mode
+# Start in background mode (daemon)
 pacli web start
 
-# Stop background mode
-pacli web stop
-
-# Check background status
+# Check status / Stop
 pacli web status
-
-# Start on a custom host and port
-pacli web --host 0.0.0.0 --port 8080
-
-# Start in background on custom host and port
-pacli web start --host 0.0.0.0 --port 8080
-
-# Start without opening browser
-pacli web --no-browser
-
-# Start in background without opening browser
-pacli web start --no-browser
+pacli web stop
 ```
 
-The Web UI provides:
+### Highlights:
+- 🗂️ **Sidebar Vault Switcher**: Seamlessly switch between Personal Store and Team Vaults.
+- 👥 **Team Management Modal**: Invite team members by User ID and change roles visually.
+- 📋 **Audit Log Viewer**: Inspect who accessed or updated secrets with timestamps and IPs.
+- 💻 **In-Browser SSH Terminal**: Direct interactive SSH terminal inside the browser.
+- 🔍 **Search & Filter**: Real-time filtering by secret type (Password, Token, SSH).
 
-- 🔐 Master password authentication
-- 📋 View, add, edit, and delete secrets
-- 🔍 Search and filter secrets by type
-- 📋 Display secrets with creation/update timestamps
-- 👁️ Toggle secret visibility
-- 📋 Copy secrets to clipboard
-- 🎨 Responsive design for desktop and mobile
+---
 
-## Display Format
+## 💡 Pro Tips
 
-- Credentials are shown as: `username:password`
-- SSH connections are shown as: `user:ip` or `user:ip (Key: /path/to/key)`
-
-## Copy to Clipboard
-
-To copy a secret directly to your clipboard, use the `--clip` option:
-
+### Session-based Master Password
+Avoid typing your master password repeatedly by exporting it in your current terminal session:
 ```sh
-pacli get google --clip
+export PACLI_MASTER_PASSWORD="your-master-password"
 ```
 
-### Pipeline Usage
-
-Use `pacli cc` to copy any command output or file content to clipboard:
-
+### Pipeline & Clipboard Tools
 ```sh
-# Copy file contents
+# Copy SSH public key to clipboard
 cat ~/.ssh/id_rsa.pub | pacli cc
 
 # Copy command output
-ls -la | pacli cc
-
-# Copy JSON response
-curl -s https://api.github.com/user | pacli cc
+terraform output -json | pacli cc
 ```
 
-For more information, use `pacli --help` or see the documentation.
+---
 
-## Tips
+## 📄 License
 
-### Avoid Master Password Prompts
-
-To avoid entering your master password repeatedly, you can set it as an environment variable:
-
-```sh
-# For current session only
-export PACLI_MASTER_PASSWORD="your-master-password"
-
-# Or add to your shell profile for permanent use
-echo 'export PACLI_MASTER_PASSWORD="your-master-password"' >> ~/.bashrc  # For bash
-echo 'export PACLI_MASTER_PASSWORD="your-master-password"' >> ~/.zshrc   # For zsh
-```
-
-**Security Note:** Adding the password to your shell profile makes it persistent but less secure. Use the session-only approach for better security.
-
-### URL Shortening Setup
-
-To use the URL shortening feature, set up your [LinklyHQ](https://linklyhq.com/?via=ShakilOps) credentials as environment variables:
-
-```sh
-# Set LinklyHQ credentials
-export PACLI_LINKLYHQ_KEY="your_api_key"
-export PACLI_LINKLYHQ_WID="your_workspace_id"
-
-# Add to your shell profile for permanent use
-echo 'export PACLI_LINKLYHQ_KEY="your_api_key"' >> ~/.bashrc
-echo 'export PACLI_LINKLYHQ_WID="your_workspace_id"' >> ~/.bashrc
-```
-
-> [Visits here](https://linklyhq.com/?via=ShakilOps) to get your credentials.
-
-## Demo
-
-![demo](https://github.com/user-attachments/assets/be7ea309-9f5c-4f5a-a4f3-fdf065577d8b)
+Distributed under the [MIT License](LICENSE). Built with ❤️ by [imShakil](https://github.com/imShakil).

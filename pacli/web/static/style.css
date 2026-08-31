@@ -1912,3 +1912,244 @@ label {
         /* also hide font controls on very small screens */
     }
 }
+
+/* ============================================================
+   Vault & Team UI Styles (Phase 3)
+   ============================================================ */
+
+.sidebar-vault-box {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.vault-select-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+}
+
+.vault-select {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.65rem;
+    font-family: var(--font-ui);
+    font-size: 0.825rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.vault-select:focus {
+    border-color: var(--accent);
+}
+
+.vault-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.badge-vault {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    text-transform: capitalize;
+    font-size: 0.72rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+}
+
+/* Team Management Modal */
+.team-identity-banner {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.team-members-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.team-members-header h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.add-member-box {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.add-member-box h5 {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+    color: var(--accent);
+}
+
+.grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.team-members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.team-member-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0.9rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color 0.15s ease;
+}
+
+.team-member-card:hover {
+    border-color: var(--border2);
+}
+
+.member-info .member-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.tag-you {
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: var(--accent-subtle);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-weight: normal;
+}
+
+.member-info .member-id {
+    font-size: 0.75rem;
+    color: var(--muted2);
+    margin-top: 0.2rem;
+}
+
+.member-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.member-role-select {
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.78rem;
+    outline: none;
+}
+
+/* Audit Log Modal */
+.audit-log-container {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+}
+
+.audit-table th {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--border2);
+    color: var(--muted2);
+    font-family: var(--font-ui);
+    font-weight: 600;
+}
+
+.audit-table td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.audit-time {
+    color: var(--muted2);
+    white-space: nowrap;
+}
+
+.audit-action-tag {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.audit-action-create,
+.audit-action-create_vault {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+}
+
+.audit-action-read {
+    background: rgba(96, 165, 250, 0.15);
+    color: #60a5fa;
+}
+
+.audit-action-update,
+.audit-action-set_role {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+}
+
+.audit-action-delete,
+.audit-action-remove_member {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}
+
+.audit-action-add_member,
+.audit-action-import {
+    background: rgba(167, 139, 250, 0.15);
+    color: #a78bfa;
+}
+
+.audit-details {
+    color: var(--text);
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

@@ -2,6 +2,7 @@ import os
 import click
 from getpass import getpass
 from ..store import SecretStore
+from ..vault import VaultManager
 from ..log import get_logger
 from ..decorators import master_password_required
 
@@ -24,8 +25,9 @@ def backup():
     show_default=True,
     help="Output file path (e.g. ~/Dropbox/pacli_backup.pacli)",
 )
+@click.option("--vault", "-v", "vault_name", default=None, help="Export a team vault instead of personal secrets.")
 @master_password_required
-def backup_export(output):
+def backup_export(output, vault_name):
     """
     Export all secrets to an encrypted backup file.
 
@@ -50,14 +52,25 @@ def backup_export(output):
         return
 
     try:
-        blob = store.export_encrypted_backup(pw1)
+        if vault_name:
+            vm = VaultManager()
+            blob = vm.export_vault_backup(vault_name, pw1, store.fernet)
+            default_name = f"pacli_vault_{vault_name}.pacli"
+            if output == DEFAULT_BACKUP_NAME:
+                output = default_name
+        else:
+            blob = store.export_encrypted_backup(pw1)
+
         output = os.path.expanduser(output)
         with open(output, "wb") as f:
             f.write(blob)
-        click.echo(f"✅ Backup saved to: {output}")
+        source = f"vault '{vault_name}'" if vault_name else "personal secrets"
+        click.echo(f"✅ Backup of {source} saved to: {output}")
         click.echo("   Upload this file to your cloud storage of choice.")
         click.echo("   Use 'pacli backup import' on any device to restore.")
         logger.info(f"Encrypted backup exported to {output}")
+    except (ValueError, PermissionError) as e:
+        click.echo(f"❌ {e}")
     except Exception as e:
         click.echo(f"❌ Backup failed: {e}")
         logger.error(f"Backup export failed: {e}")
@@ -77,8 +90,9 @@ def backup_export(output):
     default=False,
     help="Overwrite secrets that already exist (default: skip duplicates)",
 )
+@click.option("--vault", "-v", "vault_name", default=None, help="Import into a team vault instead of personal store.")
 @master_password_required
-def backup_import(input_path, overwrite):
+def backup_import(input_path, overwrite, vault_name):
     """
     Import secrets from an encrypted backup file.
 
@@ -97,12 +111,20 @@ def backup_import(input_path, overwrite):
     try:
         with open(input_path, "rb") as f:
             blob = f.read()
-        stats = store.import_encrypted_backup(blob, pw, merge=not overwrite)
+
+        if vault_name:
+            vm = VaultManager()
+            stats = vm.import_vault_backup(vault_name, blob, pw, store.fernet, merge=not overwrite)
+            target = f"vault '{vault_name}'"
+        else:
+            stats = store.import_encrypted_backup(blob, pw, merge=not overwrite)
+            target = "personal store"
+
         click.echo(
-            f"✅ Import complete: {stats['imported']} imported, "
+            f"✅ Import to {target} complete: {stats['imported']} imported, "
             f"{stats['skipped']} skipped, {stats['errors']} errors."
         )
-        logger.info(f"Backup imported from {input_path}: {stats}")
+        logger.info(f"Backup imported from {input_path} to {target}: {stats}")
     except ValueError as e:
         click.echo(f"❌ {e}")
     except Exception as e:

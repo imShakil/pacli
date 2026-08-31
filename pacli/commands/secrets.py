@@ -2,6 +2,7 @@ import click
 import datetime
 from getpass import getpass
 from ..store import SecretStore
+from ..vault import VaultManager
 from ..log import get_logger
 from ..decorators import master_password_required
 from ..helpers import choice_one, copy_to_clipboard
@@ -153,16 +154,38 @@ def _prompt_updated_ssh_secret(current_ssh):
 @click.option("--key", "-k", "key_path", help="Path to SSH private key file.")
 @click.option("--port", "-p", "ssh_port", help="SSH port (default: 22).")
 @click.option("--opts", "-o", "ssh_opts", help="Additional SSH options.")
+@click.option("--vault", "-v", "vault_name", default=None, help="Save to a team vault instead of personal store.")
 @click.argument("label", required=True)
 @click.argument("arg1", required=False)
 @click.argument("arg2", required=False)
 @click.pass_context
 @master_password_required
-def add(ctx, secret_type, key_path, ssh_port, ssh_opts, label, arg1, arg2):
+def add(ctx, secret_type, key_path, ssh_port, ssh_opts, vault_name, label, arg1, arg2):
     """Add a secret with LABEL. Use --type to specify token, password, or ssh."""
     store = SecretStore()
     del ctx
     secret_type = _detect_secret_type(secret_type, arg1, arg2)
+
+    # If targeting a vault, route through VaultManager
+    if vault_name:
+        store.require_fernet()
+        vm = VaultManager()
+        try:
+            if secret_type == "token":  # nosec B105
+                secret = arg1 if arg1 else getpass("🔐 Enter token: ")
+                vm.save_secret(vault_name, label, secret, "token", store.fernet)
+            elif secret_type == "password":  # nosec B105
+                username = arg1 if arg1 else click.prompt("Enter username")
+                password = arg2 if arg2 else getpass("🔐 Enter password: ")
+                vm.save_secret(vault_name, label, f"{username}:{password}", "password", store.fernet)
+            else:
+                user_ip = _build_ssh_user_ip(arg1, arg2)
+                ssh_data = _append_ssh_parts(user_ip, key_path, ssh_port, ssh_opts)
+                vm.save_secret(vault_name, label, ssh_data, "ssh", store.fernet)
+            click.echo(f"✅ Secret saved to vault '{vault_name}'.")
+        except (ValueError, PermissionError, RuntimeError) as e:
+            click.echo(f"❌ {e}")
+        return
 
     if secret_type == "token":  # nosec B105
         _save_token_secret(store, label, arg1)
@@ -176,10 +199,33 @@ def add(ctx, secret_type, key_path, ssh_port, ssh_opts, label, arg1, arg2):
 @click.command()
 @click.argument("label", required=True)
 @click.option("--clip", is_flag=True, help="Copy the secret to clipboard instead of printing.")
+@click.option("--vault", "-v", "vault_name", default=None, help="Retrieve from a team vault.")
 @master_password_required
-def get(label, clip):
+def get(label, clip, vault_name):
     """Retrieve secrets by LABEL. Use --clip to copy to clipboard."""
     store = SecretStore()
+
+    # If targeting a vault, route through VaultManager
+    if vault_name:
+        store.require_fernet()
+        vm = VaultManager()
+        try:
+            matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
+        except (PermissionError, ValueError, RuntimeError) as e:
+            click.echo(f"❌ {e}")
+            return
+        if not matches:
+            click.echo("❌ Secret not found.")
+            return
+        selected = _select_secret(label, matches)
+        if not selected:
+            return
+        if clip:
+            _copy_secret(selected)
+            return
+        _print_secret(selected, "🔐 SSH: ")
+        return
+
     matches = store.get_secrets_by_label(label)
     if not matches:
         logger.warning(f"Secret not found for label: {label}")
@@ -221,9 +267,30 @@ def get_by_id(secret_id, clip):
 
 
 @click.command()
+@click.option("--vault", "-v", "vault_name", default=None, help="List secrets from a team vault.")
 @master_password_required
-def list():
+def list(vault_name):
     """List all saved secrets."""
+    # If targeting a vault, route through VaultManager
+    if vault_name:
+        vm = VaultManager()
+        try:
+            secrets = vm.list_secrets(vault_name)
+        except (PermissionError, ValueError, RuntimeError) as e:
+            click.echo(f"❌ {e}")
+            return
+        if not secrets:
+            click.echo(f"(No secrets in vault '{vault_name}')")
+            return
+        click.echo(f"📜 Secrets in vault '{vault_name}':")
+        click.echo(f"{'ID':10}  {'Label':33}  {'Type':10}  {'By':14}  {'Created':20}  {'Updated':20}")
+        click.echo("-" * 115)
+        for sid, label, stype, created_by, ctime, utime in secrets:
+            cstr = datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M:%S") if ctime else ""
+            ustr = datetime.datetime.fromtimestamp(utime).strftime("%Y-%m-%d %H:%M:%S") if utime else ""
+            click.echo(f"{sid:10}  {label:33}  {stype:10}  {(created_by or ''):14}  {cstr:20}  {ustr:20}")
+        return
+
     store = SecretStore()
     secrets = store.list_secrets()
     if not secrets:
@@ -244,10 +311,40 @@ def list():
 
 @click.command()
 @click.argument("label", required=True)
+@click.option("--vault", "-v", "vault_name", default=None, help="Update secret in a team vault.")
 @master_password_required
-def update(label):
+def update(label, vault_name):
     """Update a secret by LABEL."""
     store = SecretStore()
+
+    # If targeting a vault, route through VaultManager
+    if vault_name:
+        store.require_fernet()
+        vm = VaultManager()
+        try:
+            matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
+        except (PermissionError, ValueError, RuntimeError) as e:
+            click.echo(f"❌ {e}")
+            return
+        if not matches:
+            click.echo("❌ Secret not found or may already be deleted.")
+            return
+        selected = _select_secret(label, matches)
+        if not selected:
+            return
+        if selected["type"] == "ssh":
+            new_secret = _prompt_updated_ssh_secret(selected["secret"])
+            if not new_secret:
+                return
+        else:
+            new_secret = getpass(f"Enter updated secret for {label}:")
+        try:
+            vm.update_secret(vault_name, selected["id"], new_secret, store.fernet)
+            click.echo("✅ Updated secret successfully!")
+        except (PermissionError, ValueError) as e:
+            click.echo(f"❌ {e}")
+        return
+
     matches = store.get_secrets_by_label(label)
     if not matches:
         logger.warning(f"Attempted to update non-existent secret: {label}")
@@ -299,10 +396,37 @@ def update_by_id(secret_id):
 
 @click.command()
 @click.argument("label", required=True)
+@click.option("--vault", "-v", "vault_name", default=None, help="Delete secret from a team vault.")
 @master_password_required
-def delete(label):
+def delete(label, vault_name):
     """Delete a secret by LABEL."""
     store = SecretStore()
+
+    # If targeting a vault, route through VaultManager
+    if vault_name:
+        store.require_fernet()
+        vm = VaultManager()
+        try:
+            matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
+        except (PermissionError, ValueError, RuntimeError) as e:
+            click.echo(f"❌ {e}")
+            return
+        if not matches:
+            click.echo("❌ Secret not found or may already be deleted.")
+            return
+        selected = _select_secret(label, matches)
+        if not selected:
+            return
+        if not click.confirm("Are you sure you want to delete this secret?"):
+            click.echo("❌ Deletion cancelled.")
+            return
+        try:
+            vm.delete_secret(vault_name, selected["id"])
+            click.echo("🗑️ Deleted from the vault.")
+        except (PermissionError, ValueError) as e:
+            click.echo(f"❌ {e}")
+        return
+
     matches = store.get_secrets_by_label(label)
     if not matches:
         logger.warning(f"Attempted to delete non-existent secret: {label}")

@@ -4,6 +4,10 @@
 
 const S = {
   secrets: [],
+  vaults: [],
+  currentVault: '',
+  myVaultRole: null,
+  myIdentity: null,
   filter: 'all',
   query: '',
   currentId: null,
@@ -28,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const res = await api('GET', '/api/auth/check');
   if (!res) return showLogin();
   if (!res.configured) return showSetup();
-  if (res.authenticated) { showApp(); await loadSecrets(); }
+  if (res.authenticated) { showApp(); await loadVaults(); await loadSecrets(); }
   else showLogin();
 
   // Keyboard shortcuts
@@ -177,10 +181,45 @@ function showApp() {
 }
 
 // ------------------------------------------------------------------
+// Vaults (Phase 3)
+// ------------------------------------------------------------------
+async function loadVaults() {
+  const res = await api('GET', '/api/vaults');
+  S.vaults = res?.vaults || [];
+  renderVaultSelect();
+}
+
+function renderVaultSelect() {
+  const sel = document.getElementById('vault-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">🔒 Personal Store</option>' +
+    S.vaults.map(v => `<option value="${esc(v.name)}" ${S.currentVault === v.name ? 'selected' : ''}>🗄️ ${esc(v.name)} (${esc(v.role)})</option>`).join('');
+
+  const badgeRow = document.getElementById('vault-badge-row');
+  const roleBadge = document.getElementById('vault-role-badge');
+  if (S.currentVault) {
+    const current = S.vaults.find(v => v.name === S.currentVault);
+    S.myVaultRole = current?.role || 'viewer';
+    if (roleBadge) roleBadge.textContent = S.myVaultRole;
+    badgeRow?.classList.remove('hidden');
+  } else {
+    S.myVaultRole = null;
+    badgeRow?.classList.add('hidden');
+  }
+}
+
+async function onVaultChange(vaultName) {
+  S.currentVault = vaultName;
+  renderVaultSelect();
+  await loadSecrets();
+}
+
+// ------------------------------------------------------------------
 // Secrets
 // ------------------------------------------------------------------
 async function loadSecrets() {
-  const res = await api('GET', '/api/secrets');
+  const endpoint = S.currentVault ? `/api/vaults/${S.currentVault}/secrets` : '/api/secrets';
+  const res = await api('GET', endpoint);
   S.secrets = res?.secrets || [];
   renderGrid();
   populateSSHDropdowns();
@@ -547,10 +586,18 @@ async function saveSecret() {
   hide('edit-error');
 
   let res;
-  if (S.editingId) {
-    res = await api('PUT', `/api/secrets/${S.editingId}`, { secret });
+  if (S.currentVault) {
+    if (S.editingId) {
+      res = await api('PUT', `/api/vaults/${S.currentVault}/secrets/${S.editingId}`, { secret });
+    } else {
+      res = await api('POST', `/api/vaults/${S.currentVault}/secrets`, { label, type, secret });
+    }
   } else {
-    res = await api('POST', '/api/secrets', { label, type, secret });
+    if (S.editingId) {
+      res = await api('PUT', `/api/secrets/${S.editingId}`, { secret });
+    } else {
+      res = await api('POST', '/api/secrets', { label, type, secret });
+    }
   }
 
   if (res?.success) { closeEditModal(); await loadSecrets(); showToast('✅ Secret saved!'); }
@@ -571,6 +618,16 @@ async function openViewModal(id) {
   document.getElementById('view-type-val').innerHTML = `<span class="badge badge-${s.type}">${s.type}</span>`;
   document.getElementById('view-created-val').textContent = new Date(s.creation_time * 1000).toLocaleString();
   document.getElementById('view-updated-val').textContent = new Date(s.update_time * 1000).toLocaleString();
+
+  // Created by row
+  const createdByRow = document.getElementById('view-created-by-row');
+  const createdByVal = document.getElementById('view-created-by-val');
+  if (s.created_by) {
+    if (createdByVal) createdByVal.textContent = s.created_by;
+    createdByRow?.classList.remove('hidden');
+  } else {
+    createdByRow?.classList.add('hidden');
+  }
 
   // Show SSH-specific connect button
   const sshBtn = document.getElementById('view-ssh-btn');
@@ -624,7 +681,10 @@ function formatSSHDisplay(raw) {
 
 async function fetchSecret() {
   if (S.currentSecret) return S.currentSecret.secret;
-  const res = await api('GET', `/api/secrets/${S.currentId}/reveal`);
+  const endpoint = S.currentVault
+    ? `/api/vaults/${S.currentVault}/secrets/${S.currentId}/reveal`
+    : `/api/secrets/${S.currentId}/reveal`;
+  const res = await api('GET', endpoint);
   if (res?.secret !== undefined) {
     S.currentSecret = res;
     return res.secret;
@@ -699,7 +759,10 @@ async function deleteSecret() {
   if (!S.currentId) return;
   const s = S.secrets.find(x => x.id === S.currentId);
   if (!confirm(`Delete "${s?.label}"? This cannot be undone.`)) return;
-  const res = await api('DELETE', `/api/secrets/${S.currentId}`);
+  const endpoint = S.currentVault
+    ? `/api/vaults/${S.currentVault}/secrets/${S.currentId}`
+    : `/api/secrets/${S.currentId}`;
+  const res = await api('DELETE', endpoint);
   if (res?.success) { closeViewModal(); await loadSecrets(); showToast('🗑️ Deleted'); }
   else alert(res?.error || 'Delete failed.');
 }
@@ -1132,6 +1195,225 @@ function showToast(msg, type = 'success') {
   toast.className = `toast toast-${type} toast-show`;
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.remove('toast-show'), 2500);
+}
+
+// ------------------------------------------------------------------
+// Vault Creation (Phase 3)
+// ------------------------------------------------------------------
+function openNewVaultModal() {
+  document.getElementById('new-vault-name').value = '';
+  document.getElementById('new-vault-desc').value = '';
+  hide('new-vault-error');
+  show('new-vault-backdrop');
+  document.getElementById('new-vault-name').focus();
+}
+
+function closeNewVaultModal() { hide('new-vault-backdrop'); }
+
+async function doCreateVault() {
+  const name = val('new-vault-name').toLowerCase();
+  const description = val('new-vault-desc');
+  if (!name) return showMsg('new-vault-error', 'error', 'Vault name is required.');
+  hide('new-vault-error');
+
+  const res = await api('POST', '/api/vaults', { name, description });
+  if (res?.success) {
+    closeNewVaultModal();
+    await loadVaults();
+    S.currentVault = name;
+    renderVaultSelect();
+    await loadSecrets();
+    showToast(`✅ Vault '${name}' created!`);
+  } else {
+    showMsg('new-vault-error', 'error', res?.error || 'Failed to create vault.');
+  }
+}
+
+// ------------------------------------------------------------------
+// Team Management (Phase 3)
+// ------------------------------------------------------------------
+async function openTeamModal() {
+  if (!S.currentVault) return;
+  document.getElementById('team-modal-title').textContent = `👥 Team: ${S.currentVault}`;
+  hide('add-member-form');
+  hide('team-msg');
+  show('team-backdrop');
+  await loadTeamDetails();
+}
+
+function closeTeamModal() { hide('team-backdrop'); }
+
+function toggleAddMemberForm() {
+  const form = document.getElementById('add-member-form');
+  const isHidden = form.classList.contains('hidden');
+  form.classList.toggle('hidden', !isHidden);
+  if (isHidden) {
+    document.getElementById('new-member-id').value = '';
+    document.getElementById('new-member-name').value = '';
+    document.getElementById('new-member-role').value = 'viewer';
+    hide('add-member-error');
+    document.getElementById('new-member-id').focus();
+  }
+}
+
+async function loadTeamDetails() {
+  // Load identity info
+  const idRes = await api('GET', `/api/vaults/${S.currentVault}/identity`);
+  if (idRes && !idRes.error) {
+    S.myIdentity = idRes;
+    document.getElementById('my-identity-name').textContent = idRes.user_name || '—';
+    document.getElementById('my-identity-id').textContent = idRes.user_id || '—';
+    const roleBadge = document.getElementById('my-vault-role');
+    if (roleBadge) roleBadge.textContent = idRes.role || '—';
+  }
+
+  // Load members
+  const res = await api('GET', `/api/vaults/${S.currentVault}/members`);
+  const members = res?.members || [];
+  const listEl = document.getElementById('team-members-list');
+
+  const isAdmin = S.myIdentity?.role === 'admin';
+  const deleteBtn = document.getElementById('delete-vault-btn');
+  if (deleteBtn) deleteBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+  const addBtn = document.getElementById('add-member-toggle-btn');
+  if (addBtn) addBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+
+  if (!members.length) {
+    listEl.innerHTML = '<div class="empty-state"><p>No members found.</p></div>';
+    return;
+  }
+
+  listEl.innerHTML = members.map(m => {
+    const isSelf = m.user_id === S.myIdentity?.user_id;
+    const dateStr = m.added_at ? new Date(m.added_at * 1000).toLocaleDateString() : '';
+    return `
+      <div class="team-member-card">
+        <div class="member-info">
+          <div class="member-name">${esc(m.user_name)} ${isSelf ? '<span class="tag-you">(You)</span>' : ''}</div>
+          <div class="member-id">ID: <code class="inline-code">${esc(m.user_id)}</code> · Added ${dateStr}</div>
+        </div>
+        <div class="member-actions">
+          ${isAdmin && !isSelf ? `
+            <select class="member-role-select" onchange="doChangeMemberRole('${esc(m.user_id)}', this.value)">
+              <option value="viewer" ${m.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+              <option value="editor" ${m.role === 'editor' ? 'selected' : ''}>Editor</option>
+              <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option>
+            </select>
+            <button class="btn btn-danger btn-xs" onclick="doRemoveMember('${esc(m.user_id)}')">Remove</button>
+          ` : `
+            <span class="badge badge-vault">${esc(m.role)}</span>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function doAddMember() {
+  const userId = val('new-member-id');
+  const userName = val('new-member-name');
+  const role = document.getElementById('new-member-role').value;
+
+  if (!userId || !userName) return showMsg('add-member-error', 'error', 'User ID and Display Name are required.');
+  hide('add-member-error');
+
+  const res = await api('POST', `/api/vaults/${S.currentVault}/members`, {
+    user_id: userId,
+    user_name: userName,
+    role: role,
+  });
+
+  if (res?.success) {
+    toggleAddMemberForm();
+    await loadTeamDetails();
+    showToast(`✅ Added ${userName}!`);
+  } else {
+    showMsg('add-member-error', 'error', res?.error || 'Failed to add member.');
+  }
+}
+
+async function doChangeMemberRole(userId, newRole) {
+  const res = await api('PUT', `/api/vaults/${S.currentVault}/members/${userId}/role`, { role: newRole });
+  if (res?.success) {
+    showToast(`✅ Role updated to ${newRole}`);
+    await loadTeamDetails();
+  } else {
+    alert(res?.error || 'Failed to update role.');
+  }
+}
+
+async function doRemoveMember(userId) {
+  if (!confirm(`Remove member with ID "${userId}" from this vault?`)) return;
+  const res = await api('DELETE', `/api/vaults/${S.currentVault}/members/${userId}`);
+  if (res?.success) {
+    showToast('🗑️ Member removed');
+    await loadTeamDetails();
+  } else {
+    alert(res?.error || 'Failed to remove member.');
+  }
+}
+
+async function doDeleteCurrentVault() {
+  if (!S.currentVault) return;
+  if (!confirm(`Are you sure you want to permanently delete vault "${S.currentVault}" and ALL its secrets? This cannot be undone.`)) return;
+  const res = await api('DELETE', `/api/vaults/${S.currentVault}`);
+  if (res?.success) {
+    closeTeamModal();
+    S.currentVault = '';
+    await loadVaults();
+    await loadSecrets();
+    showToast('🗑️ Vault deleted.');
+  } else {
+    alert(res?.error || 'Failed to delete vault.');
+  }
+}
+
+// ------------------------------------------------------------------
+// Audit Log (Phase 3)
+// ------------------------------------------------------------------
+async function openAuditModal() {
+  if (!S.currentVault) return;
+  document.getElementById('audit-modal-title').textContent = `📋 Audit Log: ${S.currentVault}`;
+  show('audit-backdrop');
+  await loadAuditLog();
+}
+
+function closeAuditModal() { hide('audit-backdrop'); }
+
+async function loadAuditLog() {
+  const container = document.getElementById('audit-log-container');
+  container.innerHTML = '<div class="empty-state"><p>Loading audit log…</p></div>';
+
+  const res = await api('GET', `/api/vaults/${S.currentVault}/audit?limit=50`);
+  const entries = res?.entries || [];
+
+  if (!entries.length) {
+    container.innerHTML = '<div class="empty-state"><p>No audit entries for this vault yet.</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entries.map(e => `
+          <tr>
+            <td class="audit-time">${esc(e.timestamp_formatted || '')}</td>
+            <td><code class="inline-code">${esc(e.user_id || 'unknown')}</code></td>
+            <td><span class="audit-action-tag audit-action-${esc(e.action)}">${esc(e.action)}</span></td>
+            <td class="audit-details">${esc(e.details || '')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 // ------------------------------------------------------------------
