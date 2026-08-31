@@ -739,11 +739,14 @@ def _register_vault_crud_routes(app, store, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>", methods=["GET"])
     @require_auth
     def get_vault(vault_name):
-        meta = vault_manager.get_vault(vault_name)
-        if not meta:
-            return jsonify({"error": "Vault not found"}), 404
-        members = vault_manager.list_members(vault_name)
-        return jsonify({"vault": meta, "members": members})
+        try:
+            meta = vault_manager.get_vault(vault_name)
+            if not meta:
+                return jsonify({"error": "Vault not found"}), 404
+            members = vault_manager.list_members(vault_name)
+            return jsonify({"vault": meta, "members": members})
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
 
     @app.route("/api/vaults/<vault_name>", methods=["DELETE"])
     @require_auth
