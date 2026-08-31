@@ -26,8 +26,9 @@ from .log import get_logger
 
 logger = get_logger("pacli.vault")
 
+VAULTS_KEY = "vaults"
 PACLI_DIR = os.path.expanduser("~/.config/pacli")
-VAULTS_DIR = os.path.join(PACLI_DIR, "vaults")
+VAULTS_DIR = os.path.join(PACLI_DIR, VAULTS_KEY)
 REGISTRY_PATH = os.path.join(VAULTS_DIR, "vault_registry.json")
 USER_IDENTITY_PATH = os.path.join(PACLI_DIR, "user_identity.json")
 
@@ -124,7 +125,7 @@ class VaultManager:
         if os.path.exists(REGISTRY_PATH):
             with open(REGISTRY_PATH, "r") as f:
                 return json.load(f)
-        return {"vaults": {}}
+        return {VAULTS_KEY: {}}
 
     def _save_registry(self):
         """Persist the vault registry to disk."""
@@ -169,7 +170,7 @@ class VaultManager:
         name = name.strip().lower()
         if not name or not all(c.isalnum() or c in "-_" for c in name):
             raise ValueError("Vault name must be alphanumeric with hyphens/underscores only")
-        if name in self._registry["vaults"]:
+        if name in self._registry[VAULTS_KEY]:
             raise ValueError(f"Vault '{name}' already exists")
 
         identity = get_user_identity()
@@ -178,13 +179,14 @@ class VaultManager:
 
         user_id = identity["user_id"]
         vault_id = uuid.uuid4().hex[:8]
-        vault_dir = os.path.join(VAULTS_DIR, name)
-        os.makedirs(vault_dir, exist_ok=True)
+        vault_dir = self._get_vault_dir(name)
+        os.makedirs(vault_dir, mode=0o700, exist_ok=True)
 
         # Generate unique salt for this vault
         vault_salt = os.urandom(16)
         salt_path = os.path.join(vault_dir, "vault_salt.bin")
-        with open(salt_path, "wb") as f:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        with open(os.open(salt_path, flags, 0o600), "wb") as f:
             f.write(vault_salt)
 
         # Generate a random vault key (32 bytes, base64-encoded for Fernet)
@@ -197,7 +199,7 @@ class VaultManager:
 
         # Store the wrapped key
         key_path = os.path.join(vault_dir, "vault_key.enc")
-        with open(key_path, "wb") as f:
+        with open(os.open(key_path, flags, 0o600), "wb") as f:
             f.write(wrapped_key)
 
         # Initialize vault database
@@ -252,13 +254,13 @@ class VaultManager:
             "created_at": now,
             "updated_at": now,
         }
-        self._registry["vaults"][name] = vault_meta
+        self._registry[VAULTS_KEY][name] = vault_meta
         self._save_registry()
 
         # Log creation
         self._log_audit(name, user_id, "create_vault", vault_id, f"Vault '{name}' created")
 
-        logger.info(f"Vault '{name}' created by {user_id}")
+        logger.info("Vault created by %s", user_id)
         return vault_meta
 
     def list_vaults(self) -> list[dict]:
@@ -275,7 +277,7 @@ class VaultManager:
         user_id = identity["user_id"]
         result = []
 
-        for name, meta in self._registry["vaults"].items():
+        for name, meta in self._registry[VAULTS_KEY].items():
             vault_dir = os.path.join(VAULTS_DIR, name)
             db_path = os.path.join(vault_dir, "vault.db")
             if not os.path.exists(db_path):
@@ -298,7 +300,7 @@ class VaultManager:
 
     def get_vault(self, name: str) -> dict | None:
         """Get vault metadata by name."""
-        return self._registry["vaults"].get(name)
+        return self._registry[VAULTS_KEY].get(name)
 
     def delete_vault(self, name: str):
         """
@@ -311,7 +313,7 @@ class VaultManager:
             ValueError: If vault doesn't exist
             PermissionError: If caller is not admin
         """
-        if name not in self._registry["vaults"]:
+        if name not in self._registry[VAULTS_KEY]:
             raise ValueError(f"Vault '{name}' not found")
 
         self._check_permission(name, "delete_vault")
@@ -322,13 +324,13 @@ class VaultManager:
         if os.path.exists(vault_dir):
             shutil.rmtree(vault_dir)
 
-        del self._registry["vaults"][name]
+        del self._registry[VAULTS_KEY][name]
         self._save_registry()
 
         # Clear cached fernet
         self._vault_fernets.pop(name, None)
 
-        logger.info(f"Vault '{name}' deleted")
+        logger.info("Vault deleted")
 
     # ------------------------------------------------------------------
     # Vault Key Management
@@ -352,7 +354,7 @@ class VaultManager:
         if name in self._vault_fernets:
             return self._vault_fernets[name]
 
-        if name not in self._registry["vaults"]:
+        if name not in self._registry[VAULTS_KEY]:
             raise ValueError(f"Vault '{name}' not found")
 
         identity = get_user_identity()
@@ -603,7 +605,7 @@ class VaultManager:
             new_id,
             f"Created secret '{label}'",
         )
-        logger.info(f"Secret '{label}' saved to vault '{vault_name}'")
+        logger.info("Secret saved to vault")
         return new_id
 
     def get_secret(self, vault_name: str, secret_id: str, master_fernet: Fernet) -> dict | None:
@@ -887,7 +889,7 @@ class VaultManager:
         records = data.get("secrets", [])
 
         # Create vault if it doesn't exist
-        if vault_name not in self._registry["vaults"]:
+        if vault_name not in self._registry[VAULTS_KEY]:
             self.create_vault(
                 vault_name, description=data.get("vault", {}).get("description", ""), master_fernet=master_fernet
             )

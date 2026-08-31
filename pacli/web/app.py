@@ -11,6 +11,7 @@ from ..log import get_logger
 from .ssh_handler import SSHConnectionManager
 
 logger = get_logger("pacli.web")
+ERR_SECRET_NOT_FOUND = "Secret not found"
 
 
 def create_app():
@@ -230,7 +231,7 @@ def _register_get_secret_route(app, store, require_auth):
                         "update_time": secret.get("update_time"),
                     }
                 )
-            return jsonify({"error": "Secret not found"}), 404
+            return jsonify({"error": ERR_SECRET_NOT_FOUND}), 404
         except Exception as e:
             logger.error(f"Error getting secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
@@ -250,7 +251,7 @@ def _register_reveal_secret_route(app, store, require_auth):
                         "label": secret.get("label"),
                     }
                 )
-            return jsonify({"error": "Secret not found"}), 404
+            return jsonify({"error": ERR_SECRET_NOT_FOUND}), 404
         except Exception as e:
             logger.error(f"Error revealing secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
@@ -821,7 +822,7 @@ def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
                         "label": secret.get("label"),
                     }
                 )
-            return jsonify({"error": "Secret not found"}), 404
+            return jsonify({"error": ERR_SECRET_NOT_FOUND}), 404
         except (PermissionError, ValueError) as e:
             return jsonify({"error": str(e)}), 403
         except Exception as e:

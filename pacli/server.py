@@ -214,13 +214,7 @@ class SyncServerDB:
             conn.commit()
 
 
-def create_sync_server_app(db: SyncServerDB | None = None) -> Flask:
-    """Create Flask application for the sync server."""
-    if db is None:
-        db = SyncServerDB()
-
-    app = Flask("pacli_sync_server")
-
+def _build_require_token(db: SyncServerDB):
     def require_token(f):
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -243,6 +237,10 @@ def create_sync_server_app(db: SyncServerDB | None = None) -> Flask:
 
         return decorated
 
+    return require_token
+
+
+def _register_sync_server_routes(app: Flask, db: SyncServerDB, require_token):
     @app.route("/health", methods=["GET"])
     @app.route("/api/v1/health", methods=["GET"])
     def health():
@@ -314,4 +312,13 @@ def create_sync_server_app(db: SyncServerDB | None = None) -> Flask:
 
         return jsonify({"status": "found", **status})
 
+
+def create_sync_server_app(db: SyncServerDB | None = None) -> Flask:
+    """Create Flask application for the sync server."""
+    if db is None:
+        db = SyncServerDB()
+
+    app = Flask("pacli_sync_server")
+    require_token = _build_require_token(db)
+    _register_sync_server_routes(app, db, require_token)
     return app

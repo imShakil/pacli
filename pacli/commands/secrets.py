@@ -11,6 +11,8 @@ from ..ssh_utils import suggest_ssh_hosts
 logger = get_logger("pacli.commands.secrets")
 NO_SELECTION_MSG = "❌ No valid selection made. Aborting."
 SECRET_UPDATED_MSG = "✅ Updated secret successfully!"
+SECRET_NOT_FOUND_MSG = "❌ Secret not found or may already be deleted."
+NO_SECRET_MSG = "❌ Secret not found."
 
 
 def _detect_secret_type(secret_type, arg1, arg2):
@@ -197,40 +199,31 @@ def add(ctx, secret_type, key_path, ssh_port, ssh_opts, vault_name, label, arg1,
     _save_ssh_secret(store, label, arg1, arg2, key_path, ssh_port, ssh_opts)
 
 
-@click.command()
-@click.argument("label", required=True)
-@click.option("--clip", is_flag=True, help="Copy the secret to clipboard instead of printing.")
-@click.option("--vault", "-v", "vault_name", default=None, help="Retrieve from a team vault.")
-@master_password_required
-def get(label, clip, vault_name):
-    """Retrieve secrets by LABEL. Use --clip to copy to clipboard."""
-    store = SecretStore()
-
-    # If targeting a vault, route through VaultManager
-    if vault_name:
-        store.require_fernet()
-        vm = VaultManager()
-        try:
-            matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
-        except (PermissionError, ValueError, RuntimeError) as e:
-            click.echo(f"❌ {e}")
-            return
-        if not matches:
-            click.echo("❌ Secret not found.")
-            return
-        selected = _select_secret(label, matches)
-        if not selected:
-            return
-        if clip:
-            _copy_secret(selected)
-            return
-        _print_secret(selected, "🔐 SSH: ")
+def _get_vault_secret(vault_name, label, clip, store):
+    store.require_fernet()
+    vm = VaultManager()
+    try:
+        matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
+    except (PermissionError, ValueError, RuntimeError) as e:
+        click.echo(f"❌ {e}")
         return
+    if not matches:
+        click.echo(NO_SECRET_MSG)
+        return
+    selected = _select_secret(label, matches)
+    if not selected:
+        return
+    if clip:
+        _copy_secret(selected)
+        return
+    _print_secret(selected, "🔐 SSH: ")
 
+
+def _get_personal_secret(label, clip, store):
     matches = store.get_secrets_by_label(label)
     if not matches:
         logger.warning(f"Secret not found for label: {label}")
-        click.echo("❌ Secret not found.")
+        click.echo(NO_SECRET_MSG)
         return
     selected = _select_secret(label, matches)
     if not selected:
@@ -241,6 +234,20 @@ def get(label, clip, vault_name):
         _copy_secret(selected)
         return
     _print_secret(selected, "🔐 SSH: ")
+
+
+@click.command()
+@click.argument("label", required=True)
+@click.option("--clip", is_flag=True, help="Copy the secret to clipboard instead of printing.")
+@click.option("--vault", "-v", "vault_name", default=None, help="Retrieve from a team vault.")
+@master_password_required
+def get(label, clip, vault_name):
+    """Retrieve secrets by LABEL. Use --clip to copy to clipboard."""
+    store = SecretStore()
+    if vault_name:
+        _get_vault_secret(vault_name, label, clip, store)
+    else:
+        _get_personal_secret(label, clip, store)
 
 
 @click.command()
@@ -267,32 +274,26 @@ def get_by_id(secret_id, clip):
         click.echo("❌ An error occurred while retrieving the secret.")
 
 
-@click.command()
-@click.option("--vault", "-v", "vault_name", default=None, help="List secrets from a team vault.")
-@master_password_required
-def list(vault_name):
-    """List all saved secrets."""
-    # If targeting a vault, route through VaultManager
-    if vault_name:
-        vm = VaultManager()
-        try:
-            secrets = vm.list_secrets(vault_name)
-        except (PermissionError, ValueError, RuntimeError) as e:
-            click.echo(f"❌ {e}")
-            return
-        if not secrets:
-            click.echo(f"(No secrets in vault '{vault_name}')")
-            return
-        click.echo(f"📜 Secrets in vault '{vault_name}':")
-        click.echo(f"{'ID':10}  {'Label':33}  {'Type':10}  {'By':14}  {'Created':20}  {'Updated':20}")
-        click.echo("-" * 115)
-        for sid, label, stype, created_by, ctime, utime in secrets:
-            cstr = datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M:%S") if ctime else ""
-            ustr = datetime.datetime.fromtimestamp(utime).strftime("%Y-%m-%d %H:%M:%S") if utime else ""
-            click.echo(f"{sid:10}  {label:33}  {stype:10}  {(created_by or ''):14}  {cstr:20}  {ustr:20}")
+def _list_vault_secrets(vault_name):
+    vm = VaultManager()
+    try:
+        secrets = vm.list_secrets(vault_name)
+    except (PermissionError, ValueError, RuntimeError) as e:
+        click.echo(f"❌ {e}")
         return
+    if not secrets:
+        click.echo(f"(No secrets in vault '{vault_name}')")
+        return
+    click.echo(f"📜 Secrets in vault '{vault_name}':")
+    click.echo(f"{'ID':10}  {'Label':33}  {'Type':10}  {'By':14}  {'Created':20}  {'Updated':20}")
+    click.echo("-" * 115)
+    for sid, label, stype, created_by, ctime, utime in secrets:
+        cstr = datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M:%S") if ctime else ""
+        ustr = datetime.datetime.fromtimestamp(utime).strftime("%Y-%m-%d %H:%M:%S") if utime else ""
+        click.echo(f"{sid:10}  {label:33}  {stype:10}  {(created_by or ''):14}  {cstr:20}  {ustr:20}")
 
-    store = SecretStore()
+
+def _list_personal_secrets(store):
     secrets = store.list_secrets()
     if not secrets:
         logger.info("No secrets found.")
@@ -301,7 +302,6 @@ def list(vault_name):
 
     logger.info("Listing all saved secrets.")
     click.echo("📜 List of saved secrets:")
-
     click.echo(f"{'ID':10}  {'Label':33}  {'Type':10}  {'Created':20}  {'Updated':20}")
     click.echo("-" * 100)
     for sid, label, stype, ctime, utime in secrets:
@@ -311,45 +311,48 @@ def list(vault_name):
 
 
 @click.command()
-@click.argument("label", required=True)
-@click.option("--vault", "-v", "vault_name", default=None, help="Update secret in a team vault.")
+@click.option("--vault", "-v", "vault_name", default=None, help="List secrets from a team vault.")
 @master_password_required
-def update(label, vault_name):
-    """Update a secret by LABEL."""
-    store = SecretStore()
-
-    # If targeting a vault, route through VaultManager
+def list(vault_name):
+    """List all saved secrets."""
     if vault_name:
-        store.require_fernet()
-        vm = VaultManager()
-        try:
-            matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
-        except (PermissionError, ValueError, RuntimeError) as e:
-            click.echo(f"❌ {e}")
-            return
-        if not matches:
-            click.echo("❌ Secret not found or may already be deleted.")
-            return
-        selected = _select_secret(label, matches)
-        if not selected:
-            return
-        if selected["type"] == "ssh":
-            new_secret = _prompt_updated_ssh_secret(selected["secret"])
-            if not new_secret:
-                return
-        else:
-            new_secret = getpass(f"Enter updated secret for {label}:")
-        try:
-            vm.update_secret(vault_name, selected["id"], new_secret, store.fernet)
-            click.echo(SECRET_UPDATED_MSG)
-        except (PermissionError, ValueError) as e:
-            click.echo(f"❌ {e}")
-        return
+        _list_vault_secrets(vault_name)
+    else:
+        _list_personal_secrets(SecretStore())
 
+
+def _update_vault_secret(vault_name, label, store):
+    store.require_fernet()
+    vm = VaultManager()
+    try:
+        matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
+    except (PermissionError, ValueError, RuntimeError) as e:
+        click.echo(f"❌ {e}")
+        return
+    if not matches:
+        click.echo(SECRET_NOT_FOUND_MSG)
+        return
+    selected = _select_secret(label, matches)
+    if not selected:
+        return
+    if selected["type"] == "ssh":
+        new_secret = _prompt_updated_ssh_secret(selected["secret"])
+        if not new_secret:
+            return
+    else:
+        new_secret = getpass(f"Enter updated secret for {label}:")
+    try:
+        vm.update_secret(vault_name, selected["id"], new_secret, store.fernet)
+        click.echo(SECRET_UPDATED_MSG)
+    except (PermissionError, ValueError) as e:
+        click.echo(f"❌ {e}")
+
+
+def _update_personal_secret(label, store):
     matches = store.get_secrets_by_label(label)
     if not matches:
         logger.warning(f"Attempted to update non-existent secret: {label}")
-        click.echo("❌ Secret not found or may already be deleted.")
+        click.echo(SECRET_NOT_FOUND_MSG)
         return
     logger.info(f"Updating secret for label: {label}")
     selected = _select_secret(label, matches)
@@ -369,6 +372,19 @@ def update(label, vault_name):
         logger.info(f"Secreted update for {label} with ID: {secret_id}")
     except Exception as e:
         click.echo(f"❌ couldn't able to update due to {e}")
+
+
+@click.command()
+@click.argument("label", required=True)
+@click.option("--vault", "-v", "vault_name", default=None, help="Update secret in a team vault.")
+@master_password_required
+def update(label, vault_name):
+    """Update a secret by LABEL."""
+    store = SecretStore()
+    if vault_name:
+        _update_vault_secret(vault_name, label, store)
+    else:
+        _update_personal_secret(label, store)
 
 
 @click.command()
@@ -395,43 +411,35 @@ def update_by_id(secret_id):
         click.echo(f"❌ couldn't able to update due to {e}")
 
 
-@click.command()
-@click.argument("label", required=True)
-@click.option("--vault", "-v", "vault_name", default=None, help="Delete secret from a team vault.")
-@master_password_required
-def delete(label, vault_name):
-    """Delete a secret by LABEL."""
-    store = SecretStore()
-
-    # If targeting a vault, route through VaultManager
-    if vault_name:
-        store.require_fernet()
-        vm = VaultManager()
-        try:
-            matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
-        except (PermissionError, ValueError, RuntimeError) as e:
-            click.echo(f"❌ {e}")
-            return
-        if not matches:
-            click.echo("❌ Secret not found or may already be deleted.")
-            return
-        selected = _select_secret(label, matches)
-        if not selected:
-            return
-        if not click.confirm("Are you sure you want to delete this secret?"):
-            click.echo("❌ Deletion cancelled.")
-            return
-        try:
-            vm.delete_secret(vault_name, selected["id"])
-            click.echo("🗑️ Deleted from the vault.")
-        except (PermissionError, ValueError) as e:
-            click.echo(f"❌ {e}")
+def _delete_vault_secret(vault_name, label, store):
+    store.require_fernet()
+    vm = VaultManager()
+    try:
+        matches = vm.get_secrets_by_label(vault_name, label, store.fernet)
+    except (PermissionError, ValueError, RuntimeError) as e:
+        click.echo(f"❌ {e}")
         return
+    if not matches:
+        click.echo(SECRET_NOT_FOUND_MSG)
+        return
+    selected = _select_secret(label, matches)
+    if not selected:
+        return
+    if not click.confirm("Are you sure you want to delete this secret?"):
+        click.echo("❌ Deletion cancelled.")
+        return
+    try:
+        vm.delete_secret(vault_name, selected["id"])
+        click.echo("🗑️ Deleted from the vault.")
+    except (PermissionError, ValueError) as e:
+        click.echo(f"❌ {e}")
 
+
+def _delete_personal_secret(label, store):
     matches = store.get_secrets_by_label(label)
     if not matches:
         logger.warning(f"Attempted to delete non-existent secret: {label}")
-        click.echo("❌ Secret not found or may already be deleted.")
+        click.echo(SECRET_NOT_FOUND_MSG)
         return
     logger.info(f"Deleting secret for label: {label}")
     selected = _select_secret(label, matches)
@@ -447,6 +455,19 @@ def delete(label, vault_name):
     store.delete_secret(selected["id"])
     logger.info(f"Secret deleted for label: {label} with ID: {selected['id']}")
     click.echo("🗑️ Deleted from the list.")
+
+
+@click.command()
+@click.argument("label", required=True)
+@click.option("--vault", "-v", "vault_name", default=None, help="Delete secret from a team vault.")
+@master_password_required
+def delete(label, vault_name):
+    """Delete a secret by LABEL."""
+    store = SecretStore()
+    if vault_name:
+        _delete_vault_secret(vault_name, label, store)
+    else:
+        _delete_personal_secret(label, store)
 
 
 @click.command()
