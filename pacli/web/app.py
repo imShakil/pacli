@@ -754,8 +754,10 @@ def _register_vault_crud_routes(app, store, vault_manager, require_auth):
         try:
             vault_manager.delete_vault(vault_name)
             return jsonify({"success": True, "message": f"Vault '{vault_name}' deleted"})
-        except (ValueError, PermissionError) as e:
-            return jsonify({"error": str(e)}), 400
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
         except Exception as e:
             logger.error(f"Error deleting vault: {e}")
             return jsonify({"error": str(e)}), 500
