@@ -872,6 +872,10 @@ def _register_vault_members_routes(app, store, vault_manager, require_auth):
         try:
             members = vault_manager.list_members(vault_name)
             return jsonify({"members": members})
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
