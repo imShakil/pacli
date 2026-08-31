@@ -487,7 +487,7 @@ class VaultManager:
 
         now = int(time.time())
         conn.execute(
-            "INSERT INTO members (user_id, user_name, role, wrapped_key, added_at) " "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO members (user_id, user_name, role, wrapped_key, added_at) VALUES (?, ?, ?, ?, ?)",
             (target_user_id, target_user_name, role, wrapped_for_member, now),
         )
         conn.commit()
@@ -627,7 +627,7 @@ class VaultManager:
         try:
             value = vault_fernet.decrypt(row[2].encode()).decode()
         except Exception as e:
-            logger.error("Decryption failed for vault secret %s: %s", secret_id, e)
+            logger.error("Decryption failed for vault secret %s", e)
             return None
 
         identity = get_user_identity()
