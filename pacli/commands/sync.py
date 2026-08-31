@@ -205,7 +205,7 @@ def sync_pull(vault_name, source_path, server_url, token, sync_password, overwri
         click.echo(f"☁️ Pulling vault '{vault_name}' from {server_url}...")
         try:
             blob, meta = pull_from_server(vault_name, server_url, token)
-            if meta.get("not_modified"):
+            if meta.get("not_modified") or blob is None:
                 click.echo("✅ Vault is already up-to-date (no changes on server).")
                 return
 
