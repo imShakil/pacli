@@ -135,7 +135,7 @@ class VaultManager:
 
     def _validate_vault_name(self, name: str) -> str:
         """Validate vault name format and prevent directory traversal."""
-        clean = os.path.basename(str(name).strip())
+        clean = os.path.basename(name.strip())
         if not clean or clean != name.strip():
             raise ValueError(f"Invalid vault name: '{name}'. Cannot contain path separators.")
         return clean
