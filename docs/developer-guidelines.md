@@ -21,23 +21,33 @@ pacli --help
 ├── sonar-project.properties
 ├── uv.lock
 ├── docs
-│   └── developer-guidelines.md
+│   ├── developer-guidelines.md
+│   └── index.html
 ├── pacli
 │   ├── __init__.py
+│   ├── audit.py
 │   ├── cli.py
 │   ├── decorators.py
 │   ├── helpers.py
 │   ├── linklyhq.py
 │   ├── log.py
+│   ├── server.py
 │   ├── ssh_utils.py
 │   ├── store.py
+│   ├── strength.py
+│   ├── sync_client.py
+│   ├── validators.py
+│   ├── vault.py
 │   ├── commands
 │   │   ├── __init__.py
 │   │   ├── admin.py
 │   │   ├── ai.py
 │   │   ├── backup.py
 │   │   ├── secrets.py
+│   │   ├── server.py
 │   │   ├── ssh.py
+│   │   ├── sync.py
+│   │   ├── team.py
 │   │   ├── utils.py
 │   │   └── web.py
 │   └── web
@@ -46,6 +56,7 @@ pacli --help
 │       ├── ssh_handler.py
 │       ├── static
 │       │   ├── app.js
+│       │   ├── ssh_terminal.js
 │       │   └── style.css
 │       └── templates
 │           └── index.html
@@ -54,7 +65,12 @@ pacli --help
     ├── test_command_helpers.py
     ├── test_commands_web.py
     ├── test_core_utils.py
+    ├── test_server.py
     ├── test_store.py
+    ├── test_sync.py
+    ├── test_team_commands.py
+    ├── test_vault.py
+    ├── test_vault_web.py
     └── test_web_app.py
 
 ```
@@ -72,10 +88,13 @@ Run: `pre-commit run --all-files`
 
 ### Core Components
 
-- **SecretStore** ([`pacli/store.py`](pacli/store.py)): Master password, encryption/decryption, CRUD operations
-- **CLI Commands** ([`pacli/commands/`](pacli/commands/)): Click-based command handlers
-- **Web API** ([`pacli/web/app.py`](pacli/web/app.py)): Flask REST API with session auth
-- **Utilities**: Helpers, logging, SSH config parsing, URL shortening
+- **SecretStore** ([`pacli/store.py`](pacli/store.py)): Personal master password, encryption/decryption, CRUD operations
+- **VaultManager** ([`pacli/vault.py`](pacli/vault.py)): Per-vault database creation, RBAC (viewer, editor, admin), per-member wrapped Fernet keys, and audit logging
+- **SyncServerDB & App** ([`pacli/server.py`](pacli/server.py)): Self-hosted zero-knowledge relay server for token auth, encrypted blob storage, and audit trails
+- **SyncClient** ([`pacli/sync_client.py`](pacli/sync_client.py)): Client-side push/pull HTTP handler for syncing encrypted vault blobs
+- **CLI Commands** ([`pacli/commands/`](pacli/commands/)): Click-based command handlers (`team`, `sync`, `server`, `secrets`, `backup`, `ssh`, `web`)
+- **Web API** ([`pacli/web/app.py`](pacli/web/app.py)): Flask REST API with session auth, vault switching, team management, and audit log endpoints
+- **Utilities**: Helpers, logging, SSH config parsing, password strength meter, URL shortening
 
 ### Data Flow
 

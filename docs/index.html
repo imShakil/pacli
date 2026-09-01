@@ -790,6 +790,7 @@
     <li><a href="#commands">Commands</a></li>
     <li><a href="#webui">Web UI</a></li>
     <li><a href="#install">Install</a></li>
+    <li><img alt="hits" src="https://hitscounter.dev/api/hit?url=https%3A%2F%2Fmhosen.com%2Fpacli&label=&icon=cloud-check-fill&color=%23000&message=&style=social&tz=UTC"></li>
   </ul>
   <a href="https://github.com/imShakil/pacli" target="_blank" class="nav-cta">GitHub ↗</a>
 </nav>
@@ -853,7 +854,7 @@
         <div class="stat-label">Cloud dependencies</div>
       </div>
       <div class="stat">
-        <span class="stat-num">14+</span>
+        <span class="stat-num">18+</span>
         <div class="stat-label">CLI Commands</div>
       </div>
       <div class="stat">
@@ -878,27 +879,37 @@
       <div class="feature-card">
         <span class="feature-icon">🔒</span>
         <div class="feature-name">AES Encryption</div>
-        <p class="feature-desc">All secrets are encrypted at rest with AES and protected by a master password. Your data never leaves your device.</p>
+        <p class="feature-desc">All secrets are encrypted at rest with AES and protected by a master password. Your data never leaves your device unencrypted.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">👥</span>
+        <div class="feature-name">Team Vaults &amp; RBAC</div>
+        <p class="feature-desc">Share isolated vaults with teammates using granular roles (viewer, editor, admin) and per-user wrapped cryptographic keys.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🔄</span>
+        <div class="feature-name">Zero-Knowledge Sync</div>
+        <p class="feature-desc">Push and pull encrypted vaults using a shared folder (Dropbox, Git, NAS) or a self-hosted zero-knowledge relay server.</p>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🖥️</span>
         <div class="feature-name">Web UI Included</div>
-        <p class="feature-desc">Launch a local web interface with <code>pacli web</code> for a visual way to manage your secrets without leaving the terminal.</p>
+        <p class="feature-desc">Launch a local web interface with <code>pacli web</code> featuring vault switcher, member management, and audit log inspection.</p>
       </div>
       <div class="feature-card">
         <span class="feature-icon">📋</span>
-        <div class="feature-name">Clipboard Integration</div>
+        <div class="feature-name">Clipboard &amp; Pipelines</div>
         <p class="feature-desc">Retrieve any secret directly to your clipboard with <code>--clip</code>. Pipe any command output with <code>pacli cc</code>.</p>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🔑</span>
         <div class="feature-name">SSH Management</div>
-        <p class="feature-desc">Store SSH connections with host, user, and key file. Connect instantly with <code>pacli ssh &lt;label&gt;</code>.</p>
+        <p class="feature-desc">Store SSH connections with host, user, and key file. Connect instantly with <code>pacli ssh &lt;label&gt;</code> or in-browser terminal.</p>
       </div>
       <div class="feature-card">
-        <span class="feature-icon">📤</span>
-        <div class="feature-name">Export to JSON / CSV</div>
-        <p class="feature-desc">Export your secrets vault to JSON or CSV for backup or migration. Full control over your data.</p>
+        <span class="feature-icon">📦</span>
+        <div class="feature-name">Encrypted Backups</div>
+        <p class="feature-desc">Export and import full encrypted vault backups with master password verification for disaster recovery.</p>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🔗</span>
@@ -923,7 +934,7 @@
           </div>
           <div class="cmd-item" data-code="add">
             <span class="cmd-name">add</span>
-            <span class="cmd-desc">Add a secret with a label</span>
+            <span class="cmd-desc">Add a secret with a label (--vault)</span>
           </div>
           <div class="cmd-item" data-code="get">
             <span class="cmd-name">get</span>
@@ -933,13 +944,21 @@
             <span class="cmd-name">list</span>
             <span class="cmd-desc">List all saved secrets</span>
           </div>
-          <div class="cmd-item" data-code="update">
-            <span class="cmd-name">update</span>
-            <span class="cmd-desc">Update a secret by label</span>
+          <div class="cmd-item" data-code="team">
+            <span class="cmd-name">team</span>
+            <span class="cmd-desc">Manage team vaults, members &amp; roles</span>
           </div>
-          <div class="cmd-item" data-code="delete">
-            <span class="cmd-name">delete</span>
-            <span class="cmd-desc">Delete a secret by label</span>
+          <div class="cmd-item" data-code="sync">
+            <span class="cmd-name">sync</span>
+            <span class="cmd-desc">Push &amp; pull encrypted vaults</span>
+          </div>
+          <div class="cmd-item" data-code="server">
+            <span class="cmd-name">server</span>
+            <span class="cmd-desc">Self-hosted zero-knowledge relay</span>
+          </div>
+          <div class="cmd-item" data-code="backup">
+            <span class="cmd-name">backup</span>
+            <span class="cmd-desc">Encrypted export &amp; import</span>
           </div>
           <div class="cmd-item" data-code="ssh">
             <span class="cmd-name">ssh</span>
@@ -982,11 +1001,12 @@
         </p>
         <ul class="webui-features">
           <li>Master password authentication</li>
-          <li>View, add, edit and delete secrets</li>
+          <li>Sidebar Vault Switcher (Personal &amp; Team Vaults)</li>
+          <li>Team Management Modal (invite &amp; manage roles)</li>
+          <li>Real-time Audit Log Viewer</li>
+          <li>In-browser interactive SSH Terminal</li>
           <li>Search and filter by secret type</li>
-          <li>Toggle secret visibility</li>
-          <li>Copy to clipboard</li>
-          <li>Responsive desktop &amp; mobile design</li>
+          <li>Toggle secret visibility &amp; copy to clipboard</li>
           <li>Run in background with <code style="color:var(--accent2)">pacli web start</code></li>
         </ul>
       </div>
@@ -1002,7 +1022,7 @@
           </div>
           <div class="browser-content">
             <div class="mock-header">
-              <span class="mock-title">🔐 My Secrets</span>
+              <span class="mock-title">🔐 Vault: dev-infra</span>
               <button class="mock-add-btn">+ Add Secret</button>
             </div>
             <div class="mock-search">🔍  Search secrets...</div>
@@ -1058,7 +1078,7 @@
       <span class="install-cmd">pipx install pacli-tool</span><br>
       <br>
       <span class="install-comment"># Verify</span><br>
-      <span class="install-cmd">pacli --help</span>
+      <span class="install-cmd">pacli version</span>
     </div>
 
     <div class="install-block" id="tab-pip">
@@ -1087,7 +1107,7 @@
     <div class="section-label" style="justify-content: center;">Open Source · MIT License</div>
     <h2 class="section-title">Your secrets,<br>your machine.</h2>
     <p style="font-family: var(--mono); font-size: 0.85rem; color: var(--muted); max-width: 400px; margin: 1.5rem auto 2.5rem; line-height: 1.9;">
-      No subscriptions. No cloud sync. No telemetry. Just encrypted secrets on your local machine.
+      No subscriptions. Zero-knowledge team collaboration. Just encrypted secrets on your local machine.
     </p>
     <div class="hero-actions">
       <a href="https://pypi.org/project/pacli-tool/" target="_blank" class="btn-primary">
@@ -1150,9 +1170,8 @@
 <span class="o">Master password: </span><span class="v">••••••••</span><br>
 <span class="o">Enter token value: </span><span class="v">••••••••••••••••••••</span><br><br>
 <span class="s">✓ Secret "stripe-api-key" saved.</span><br><br>
-<span class="c"># Other types:</span><br>
-<span class="p">$</span> pacli <span class="f">add</span> <span class="f">--pass</span> <span class="v">github</span><br>
-<span class="p">$</span> pacli <span class="f">add</span> <span class="f">--ssh</span> <span class="v">ec2-vm</span> <span class="v">user:1.2.3.4</span>`,
+<span class="c"># Add to team vault:</span><br>
+<span class="p">$</span> pacli <span class="f">add</span> <span class="f">--vault</span> <span class="v">dev-infra</span> <span class="f">--pass</span> <span class="v">db-pass</span>`,
 
     get: `<span class="p">$</span> pacli <span class="f">get</span> <span class="v">stripe-api-key</span><br><br>
 <span class="o">Master password: </span><span class="v">••••••••</span><br><br>
@@ -1163,28 +1182,42 @@
 <span class="p">$</span> pacli <span class="f">get</span> <span class="v">stripe-api-key</span> <span class="f">--clip</span><br>
 <span class="s">✓ Copied to clipboard.</span>`,
 
-    list: `<span class="p">$</span> pacli <span class="f">list</span><br><br>
-<span class="o">Master password: </span><span class="v">••••••••</span><br><br>
+    list: `<span class="p">$</span> pacli <span class="f">list</span> <span class="f">--vault</span> <span class="v">dev-infra</span><br><br>
+<span class="o">Vault: dev-infra (Role: editor)</span><br><br>
 <span class="o"> ID  LABEL              TYPE      </span><br>
 <span class="o"> ──  ─────────────────  ────────  </span><br>
-<span class="s"> 1   github-token       TOKEN     </span><br>
-<span class="s"> 2   prod-db-pass       PASSWORD  </span><br>
-<span class="s"> 3   ec2-production     SSH       </span><br>
-<span class="s"> 4   stripe-api-key     TOKEN     </span>`,
+<span class="s"> 1   postgres-db        PASSWORD  </span><br>
+<span class="s"> 2   stripe-api-key     TOKEN     </span><br>
+<span class="s"> 3   ec2-production     SSH       </span>`,
 
-    update: `<span class="p">$</span> pacli <span class="f">update</span> <span class="v">github-token</span><br><br>
-<span class="o">Master password: </span><span class="v">••••••••</span><br>
-<span class="o">New value: </span><span class="v">••••••••••••••••••••</span><br><br>
-<span class="s">✓ Secret "github-token" updated.</span><br><br>
-<span class="c"># Also by ID:</span><br>
-<span class="p">$</span> pacli <span class="f">update-by-id</span> <span class="v">1</span>`,
+    team: `<span class="p">$</span> pacli <span class="f">team create-vault</span> <span class="v">dev-infra</span><br>
+<span class="s">✓ Vault "dev-infra" created.</span><br><br>
+<span class="c"># Add teammate by User ID:</span><br>
+<span class="p">$</span> pacli <span class="f">team add-member</span> <span class="v">dev-infra a8f910e1234</span> <span class="f">--role</span> <span class="v">editor</span><br>
+<span class="s">✓ Added member Bob (editor) to vault "dev-infra".</span><br><br>
+<span class="c"># View audit log:</span><br>
+<span class="p">$</span> pacli <span class="f">team audit-log</span> <span class="v">dev-infra</span>`,
 
-    delete: `<span class="p">$</span> pacli <span class="f">delete</span> <span class="v">old-key</span><br><br>
-<span class="o">Master password: </span><span class="v">••••••••</span><br>
-<span class="o">Are you sure? [y/N]: </span><span class="v">y</span><br><br>
-<span class="s">✓ Secret "old-key" deleted.</span><br><br>
-<span class="c"># Or by ID:</span><br>
-<span class="p">$</span> pacli <span class="f">delete-by-id</span> <span class="v">3</span>`,
+    sync: `<span class="c"># Push local changes to sync server:</span><br>
+<span class="p">$</span> pacli <span class="f">sync push</span> <span class="v">dev-infra</span><br>
+<span class="s">✓ Pushed vault "dev-infra" (version 3) to server.</span><br><br>
+<span class="c"># Pull updates on teammate machine:</span><br>
+<span class="p">$</span> pacli <span class="f">sync pull</span> <span class="v">dev-infra</span><br>
+<span class="s">✓ Vault "dev-infra" updated (version 3).</span>`,
+
+    server: `<span class="c"># Start zero-knowledge sync server:</span><br>
+<span class="p">$</span> pacli <span class="f">server start</span> <span class="f">--port</span> <span class="v">58380</span> <span class="f">--daemon</span><br>
+<span class="s">✓ Sync server started on http://0.0.0.0:58380</span><br><br>
+<span class="c"># Create team access token:</span><br>
+<span class="p">$</span> pacli <span class="f">server token create</span> <span class="f">--name</span> <span class="v">"DevTeam"</span><br>
+<span class="s">✓ Token: pacli_tok_84f9a0...</span>`,
+
+    backup: `<span class="c"># Export encrypted backup:</span><br>
+<span class="p">$</span> pacli <span class="f">backup export</span> <span class="f">--vault</span> <span class="v">dev-infra</span> <span class="f">-o</span> <span class="v">backup.enc</span><br>
+<span class="s">✓ Exported encrypted backup to backup.enc</span><br><br>
+<span class="c"># Import on another device:</span><br>
+<span class="p">$</span> pacli <span class="f">backup import</span> <span class="v">backup.enc</span> <span class="f">--vault</span> <span class="v">dev-infra</span><br>
+<span class="s">✓ Backup imported successfully.</span>`,
 
     ssh: `<span class="p">$</span> pacli <span class="f">add</span> <span class="f">--ssh</span> <span class="v">ec2-vm</span> <span class="v">ubuntu:1.2.3.4</span> <span class="f">--key</span> <span class="v">~/.ssh/id_rsa</span><br>
 <span class="s">✓ SSH connection "ec2-vm" saved.</span><br><br>

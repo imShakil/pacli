@@ -91,6 +91,22 @@
 
     <div class="body">
       <aside class="sidebar">
+        <!-- Vault switcher -->
+        <div class="sidebar-vault-box">
+          <label for="vault-select" class="sidebar-section-title">Vault</label>
+          <div class="vault-select-row">
+            <select id="vault-select" class="vault-select" aria-label="Select Vault" onchange="onVaultChange(this.value)">
+              <option value="">🔒 Personal Store</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="openNewVaultModal()" title="Create new team vault">+</button>
+          </div>
+          <div id="vault-badge-row" class="vault-badge-row hidden">
+            <span id="vault-role-badge" class="badge badge-vault">Admin</span>
+            <button class="btn btn-ghost btn-xs" onclick="openTeamModal()" title="Manage Team Members">👥 Team</button>
+            <button class="btn btn-ghost btn-xs" onclick="openAuditModal()" title="View Audit Log">📋 Log</button>
+          </div>
+        </div>
+
         <div>
           <div class="sidebar-section-title">Filter</div>
           <div class="filter-list">
@@ -105,10 +121,10 @@
           </div>
         </div>
         <div>
-          <div class="sidebar-section-title">Search <kbd class="kbd">⌘K</kbd></div>
+          <label for="search-input" class="sidebar-section-title">Search <kbd class="kbd">⌘K</kbd></label>
           <div class="search-wrap">
             <span class="search-icon">🔍</span>
-            <input type="text" id="search-input" placeholder="Search labels…" oninput="doSearch(this.value)" />
+            <input type="text" id="search-input" aria-label="Search secrets by label" placeholder="Search labels…" oninput="doSearch(this.value)" />
           </div>
         </div>
         <div class="sidebar-shortcuts">
@@ -204,7 +220,11 @@
           <button class="btn btn-ghost btn-sm" onclick="copyFullSecret()" title="Copy full value">📄 Full</button>
         </div>
 
-        <div class="view-row" style="margin-top:.75rem">
+        <div class="view-row" id="view-created-by-row" style="margin-top:.75rem">
+          <div class="view-row-label">Created by</div>
+          <div class="view-row-value" id="view-created-by-val">—</div>
+        </div>
+        <div class="view-row">
           <div class="view-row-label">Created</div>
           <div class="view-row-value" id="view-created-val"></div>
         </div>
@@ -324,7 +344,7 @@
             <div id="ssh-output" class="ssh-output"></div>
             <div class="ssh-input-row">
               <span class="ssh-prompt">$&nbsp;</span>
-              <input type="text" class="ssh-cmd" id="ssh-cmd" placeholder="type command and press Enter…" disabled
+              <input type="text" class="ssh-cmd" id="ssh-cmd" aria-label="SSH Command Input" placeholder="type command and press Enter…" disabled
                 onkeydown="sshKey(event)" autocomplete="off" spellcheck="false" />
               <button class="btn btn-danger btn-sm ssh-disconnect-btn" onclick="sshDisconnect()">Disconnect</button>
             </div>
@@ -352,7 +372,8 @@
           ondrop="event.preventDefault();this.classList.remove('drag-over');S.envFile=event.dataTransfer.files[0];const r=new FileReader();r.onload=e=>previewEnvFile(e.target.result);r.readAsText(S.envFile)">
           <p>📂 Click or drag &amp; drop a <code class="inline-code">.env</code> file</p>
         </button>
-        <input type="file" id="env-file-input" accept=".env,text/plain" class="hidden"
+        <label for="env-file-input" class="hidden">Choose .env File</label>
+        <input type="file" id="env-file-input" aria-label="Choose .env file" accept=".env,text/plain" class="hidden"
           onchange="onEnvFileSelected(this)" />
 
         <div id="env-preview" class="env-preview"></div>
@@ -402,18 +423,120 @@
               ondragleave="this.classList.remove('drag-over')" ondrop="handleFileDrop(event)">
               <p id="upload-zone-label">📂 Click to choose a .pacli file, or drag & drop</p>
             </button>
-            <input type="file" id="backup-file-input" accept=".pacli" class="hidden" onchange="onFileSelected(this)" />
+            <label for="backup-file-input" class="hidden">Choose Backup File</label>
+            <input type="file" id="backup-file-input" aria-label="Choose backup file" accept=".pacli" class="hidden" onchange="onFileSelected(this)" />
             <div class="field"><label for="backup-import-pw">Backup password</label>
               <input type="password" id="backup-import-pw" placeholder="Password used when backup was created" />
             </div>
-            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
+            <label for="import-overwrite" style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;cursor:pointer">
               <input type="checkbox" id="import-overwrite" style="width:auto;margin:0" />
               <span style="font-size:.875rem">Overwrite existing secrets</span>
-            </div>
+            </label>
             <button class="btn btn-primary" onclick="doBackupImport()">⬆️ Import Secrets</button>
           </div>
           <div id="backup-import-msg" class="alert hidden"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Vault modal -->
+  <div id="new-vault-backdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Create Team Vault</h3>
+        <button class="modal-close" onclick="closeNewVaultModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="new-vault-name">Vault Name <span class="required-tag">*</span></label>
+          <input type="text" id="new-vault-name" placeholder="e.g. team-infra, prod-keys" autocomplete="off" />
+          <span class="help-text">Alphanumeric with hyphens/underscores only.</span>
+        </div>
+        <div class="field">
+          <label for="new-vault-desc">Description <span class="optional-tag">optional</span></label>
+          <input type="text" id="new-vault-desc" placeholder="e.g. Shared keys for DevOps team" autocomplete="off" />
+        </div>
+        <div id="new-vault-error" class="alert alert-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeNewVaultModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="doCreateVault()">Create Vault</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Team Management modal -->
+  <div id="team-backdrop" class="modal-backdrop hidden">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="team-modal-title">👥 Team Members</h3>
+        <button class="modal-close" onclick="closeTeamModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="team-identity-banner" id="team-identity-banner">
+          <div>Your Identity: <strong id="my-identity-name">—</strong> (<code id="my-identity-id" class="inline-code">—</code>)</div>
+          <div>Role in this vault: <span id="my-vault-role" class="badge badge-vault">Admin</span></div>
+        </div>
+
+        <div class="team-members-header">
+          <h4>Members</h4>
+          <button id="add-member-toggle-btn" class="btn btn-primary btn-sm" onclick="toggleAddMemberForm()">+ Add Member</button>
+        </div>
+
+        <!-- Add member form -->
+        <div id="add-member-form" class="add-member-box hidden">
+          <h5>Add Member to Vault</h5>
+          <div class="grid-2col">
+            <div class="field">
+              <label for="new-member-id">User ID <span class="required-tag">*</span></label>
+              <input type="text" id="new-member-id" placeholder="12-char user ID (ask member)" />
+            </div>
+            <div class="field">
+              <label for="new-member-name">Display Name <span class="required-tag">*</span></label>
+              <input type="text" id="new-member-name" placeholder="e.g. Alice" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="new-member-role">Role</label>
+            <select id="new-member-role">
+              <option value="viewer">Viewer (Read-only)</option>
+              <option value="editor">Editor (Can create/edit/delete secrets)</option>
+              <option value="admin">Admin (Can manage members & vault)</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="toggleAddMemberForm()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="doAddMember()">Add Member</button>
+          </div>
+          <div id="add-member-error" class="alert alert-error hidden" style="margin-top:.5rem"></div>
+        </div>
+
+        <!-- Members list -->
+        <div id="team-members-list" class="team-members-list"></div>
+        <div id="team-msg" class="alert hidden" style="margin-top:.75rem"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm" id="delete-vault-btn" onclick="doDeleteCurrentVault()">🗑 Delete Vault</button>
+        <button class="btn btn-ghost" onclick="closeTeamModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audit Log modal -->
+  <div id="audit-backdrop" class="modal-backdrop hidden">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="audit-modal-title">📋 Vault Audit Log</h3>
+        <button class="modal-close" onclick="closeAuditModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="audit-log-container" class="audit-log-container">
+          <div class="empty-state"><p>Loading audit log…</p></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeAuditModal()">Close</button>
       </div>
     </div>
   </div>
@@ -468,11 +591,14 @@
       zone.addEventListener('click', () => fileInput.click());
     }
 
-    bindBackdropClose('edit-backdrop',   closeEditModal);
-    bindBackdropClose('view-backdrop',   closeViewModal);
+    bindBackdropClose('edit-backdrop',      closeEditModal);
+    bindBackdropClose('view-backdrop',      closeViewModal);
+    bindBackdropClose('new-vault-backdrop', closeNewVaultModal);
+    bindBackdropClose('team-backdrop',      closeTeamModal);
+    bindBackdropClose('audit-backdrop',     closeAuditModal);
     // NOTE: ssh-backdrop intentionally NOT closed on outside click when connected
-    bindBackdropClose('env-backdrop',    closeEnvModal);
-    bindBackdropClose('backup-backdrop', closeBackupModal);
+    bindBackdropClose('env-backdrop',       closeEnvModal);
+    bindBackdropClose('backup-backdrop',    closeBackupModal);
     bindFilePicker('env-upload-zone', 'env-file-input');
     bindFilePicker('upload-zone', 'backup-file-input');
   </script>

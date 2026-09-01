@@ -100,6 +100,14 @@ pacli = "pacli.cli:cli"
 requires = ["setuptools>=61.0", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pacli*"]
+exclude = ["ref*", "tests*", "docs*"]
+
+[tool.setuptools.package-data]
+pacli = ["web/templates/*", "web/static/*"]
+
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "no-local-version"

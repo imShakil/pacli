@@ -5,9 +5,16 @@ from .commands.ssh import ssh
 from .commands.utils import export, short, cc
 from .commands.backup import backup
 from .commands.web import web
+from .commands.team import team
+from .commands.sync import sync
+from .commands.server import server
+
+
+from . import __version__
 
 
 @click.group()
+@click.version_option(__version__, "-v", "--version", message="%(version)s")
 def cli():
     """🔐 pacli - Personal Access CLI for managing secrets..."""
     pass
@@ -41,3 +48,12 @@ cli.add_command(backup)
 
 # Web UI
 cli.add_command(web)
+
+# Team
+cli.add_command(team)
+
+# Sync
+cli.add_command(sync)
+
+# Server (Option B - Self-hosted sync relay)
+cli.add_command(server)

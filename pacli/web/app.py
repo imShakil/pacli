@@ -6,10 +6,12 @@ from functools import wraps
 from datetime import datetime
 from urllib.parse import urlparse
 from ..store import SecretStore
+from ..vault import VaultManager, get_user_identity
 from ..log import get_logger
 from .ssh_handler import SSHConnectionManager
 
 logger = get_logger("pacli.web")
+ERR_SECRET_NOT_FOUND = "Secret not found"
 
 
 def create_app():
@@ -24,7 +26,8 @@ def create_app():
 
     store = SecretStore()
     ssh_manager = SSHConnectionManager()
-    socketio = SocketIO(app)
+    vault_manager = VaultManager()
+    socketio = SocketIO(app)  # type: ignore
 
     _register_csrf_same_origin_protection(app)
     require_auth = _build_require_auth(store)
@@ -35,6 +38,7 @@ def create_app():
     _register_backup_routes(app, store, require_auth)
     _register_ssh_rest_routes(app, store, ssh_manager, require_auth)
     _register_socket_handlers(socketio, store, ssh_manager)
+    _register_vault_routes(app, store, vault_manager, require_auth)
 
     return app, socketio
 
@@ -96,6 +100,19 @@ def _serialize_secret_row(secret_row):
         "update_time": secret_row[4],
         "creation_date": datetime.fromtimestamp(secret_row[3]).strftime("%Y-%m-%d %H:%M"),
         "update_date": datetime.fromtimestamp(secret_row[4]).strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def _serialize_vault_secret_row(s):
+    return {
+        "id": s[0],
+        "label": s[1],
+        "type": s[2],
+        "created_by": s[3],
+        "creation_time": s[4],
+        "update_time": s[5],
+        "creation_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M") if s[4] else "",
+        "update_date": datetime.fromtimestamp(s[5]).strftime("%Y-%m-%d %H:%M") if s[5] else "",
     }
 
 
@@ -227,7 +244,7 @@ def _register_get_secret_route(app, store, require_auth):
                         "update_time": secret.get("update_time"),
                     }
                 )
-            return jsonify({"error": "Secret not found"}), 404
+            return jsonify({"error": ERR_SECRET_NOT_FOUND}), 404
         except Exception as e:
             logger.error(f"Error getting secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
@@ -247,7 +264,7 @@ def _register_reveal_secret_route(app, store, require_auth):
                         "label": secret.get("label"),
                     }
                 )
-            return jsonify({"error": "Secret not found"}), 404
+            return jsonify({"error": ERR_SECRET_NOT_FOUND}), 404
         except Exception as e:
             logger.error(f"Error revealing secret {secret_id}: {e}")
             return jsonify({"error": str(e)}), 500
@@ -687,3 +704,287 @@ def _start_output_streaming(socketio, ssh_manager, connection_id):
 
     t = threading.Thread(target=stream, daemon=True)
     t.start()
+
+
+# ------------------------------------------------------------------
+# Vault / Team Routes (Phase 3)
+# ------------------------------------------------------------------
+
+
+def _register_vault_routes(app, store, vault_manager, require_auth):
+    """Register all vault/team API endpoints."""
+    _register_vault_crud_routes(app, store, vault_manager, require_auth)
+    _register_vault_secrets_routes(app, store, vault_manager, require_auth)
+    _register_vault_members_routes(app, store, vault_manager, require_auth)
+    _register_vault_audit_routes(app, vault_manager, require_auth)
+
+
+def _register_vault_crud_routes(app, store, vault_manager, require_auth):
+    """Register vault CRUD endpoints."""
+
+    @app.route("/api/vaults", methods=["GET"])
+    @require_auth
+    def list_vaults():
+        try:
+            vaults = vault_manager.list_vaults()
+            return jsonify({"vaults": vaults})
+        except Exception as e:
+            logger.error(f"Error listing vaults: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/vaults", methods=["POST"])
+    @require_auth
+    def create_vault():
+        try:
+            data = request.get_json()
+            name = data.get("name", "").strip().lower()
+            description = data.get("description", "").strip()
+            if not name:
+                return jsonify({"error": "Vault name is required"}), 400
+            meta = vault_manager.create_vault(name, description=description, master_fernet=store.fernet)
+            return jsonify({"success": True, "vault": meta}), 201
+        except (ValueError, RuntimeError) as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error creating vault: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/vaults/<vault_name>", methods=["GET"])
+    @require_auth
+    def get_vault(vault_name):
+        try:
+            meta = vault_manager.get_vault(vault_name)
+            if not meta:
+                return jsonify({"error": "Vault not found"}), 404
+            members = vault_manager.list_members(vault_name)
+            return jsonify({"vault": meta, "members": members})
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
+
+    @app.route("/api/vaults/<vault_name>", methods=["DELETE"])
+    @require_auth
+    def delete_vault(vault_name):
+        try:
+            vault_manager.delete_vault(vault_name)
+            return jsonify({"success": True, "message": f"Vault '{vault_name}' deleted"})
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
+        except Exception as e:
+            logger.error(f"Error deleting vault: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
+    """Register vault secrets endpoints."""
+    _register_list_vault_secrets_route(app, vault_manager, require_auth)
+    _register_create_vault_secret_route(app, store, vault_manager, require_auth)
+    _register_reveal_vault_secret_route(app, store, vault_manager, require_auth)
+    _register_update_vault_secret_route(app, store, vault_manager, require_auth)
+    _register_delete_vault_secret_route(app, vault_manager, require_auth)
+
+
+def _register_list_vault_secrets_route(app, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/secrets", methods=["GET"])
+    @require_auth
+    def list_vault_secrets(vault_name):
+        try:
+            secrets = vault_manager.list_secrets(vault_name)
+            return jsonify({"secrets": [_serialize_vault_secret_row(s) for s in secrets]})
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error listing vault secrets: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_create_vault_secret_route(app, store, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/secrets", methods=["POST"])
+    @require_auth
+    def create_vault_secret(vault_name):
+        try:
+            data = request.get_json()
+            label = data.get("label", "").strip()
+            secret = data.get("secret", "").strip()
+            secret_type = data.get("type", "password")
+            if not label or not secret:
+                return jsonify({"error": "Label and secret are required"}), 400
+            if secret_type not in ("password", "token", "ssh"):
+                return jsonify({"error": "Invalid secret type"}), 400
+            vault_manager.save_secret(vault_name, label, secret, secret_type, store.fernet)
+            return jsonify({"success": True, "message": "Secret created in vault"}), 201
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error creating vault secret: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_reveal_vault_secret_route(app, store, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/secrets/<secret_id>/reveal", methods=["GET"])
+    @require_auth
+    def reveal_vault_secret(vault_name, secret_id):
+        try:
+            secret = vault_manager.get_secret_by_id(vault_name, secret_id, store.fernet)
+            if secret:
+                return jsonify(
+                    {
+                        "secret": secret.get("secret"),
+                        "type": secret.get("type"),
+                        "label": secret.get("label"),
+                    }
+                )
+            return jsonify({"error": ERR_SECRET_NOT_FOUND}), 404
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error revealing vault secret: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_update_vault_secret_route(app, store, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/secrets/<secret_id>", methods=["PUT"])
+    @require_auth
+    def update_vault_secret(vault_name, secret_id):
+        try:
+            data = request.get_json()
+            secret = data.get("secret", "").strip()
+            if not secret:
+                return jsonify({"error": "Secret value is required"}), 400
+            vault_manager.update_secret(vault_name, secret_id, secret, store.fernet)
+            return jsonify({"success": True, "message": "Secret updated"})
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error updating vault secret: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_delete_vault_secret_route(app, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/secrets/<secret_id>", methods=["DELETE"])
+    @require_auth
+    def delete_vault_secret(vault_name, secret_id):
+        try:
+            vault_manager.delete_secret(vault_name, secret_id)
+            return jsonify({"success": True, "message": "Secret deleted"})
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error deleting vault secret: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_vault_members_routes(app, store, vault_manager, require_auth):
+    """Register vault member management endpoints."""
+    _register_list_vault_members_route(app, vault_manager, require_auth)
+    _register_add_vault_member_route(app, store, vault_manager, require_auth)
+    _register_remove_vault_member_route(app, vault_manager, require_auth)
+    _register_set_vault_member_role_route(app, vault_manager, require_auth)
+
+
+def _register_list_vault_members_route(app, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/members", methods=["GET"])
+    @require_auth
+    def list_vault_members(vault_name):
+        try:
+            members = vault_manager.list_members(vault_name)
+            return jsonify({"members": members})
+        except PermissionError as e:
+            return jsonify({"error": str(e)}), 403
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_add_vault_member_route(app, store, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/members", methods=["POST"])
+    @require_auth
+    def add_vault_member(vault_name):
+        try:
+            data = request.get_json()
+            user_id = data.get("user_id", "").strip()
+            user_name = data.get("user_name", "").strip()
+            role = data.get("role", "viewer")
+            if not user_id or not user_name:
+                return jsonify({"error": "user_id and user_name are required"}), 400
+            vault_manager.add_member(vault_name, user_id, user_name, role, store.fernet)
+            return jsonify({"success": True, "message": f"Added {user_name} as {role}"}), 201
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error adding vault member: {e}")
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_remove_vault_member_route(app, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/members/<user_id>", methods=["DELETE"])
+    @require_auth
+    def remove_vault_member(vault_name, user_id):
+        try:
+            vault_manager.remove_member(vault_name, user_id)
+            return jsonify({"success": True, "message": "Member removed"})
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_set_vault_member_role_route(app, vault_manager, require_auth):
+    @app.route("/api/vaults/<vault_name>/members/<user_id>/role", methods=["PUT"])
+    @require_auth
+    def set_vault_member_role(vault_name, user_id):
+        try:
+            data = request.get_json()
+            role = data.get("role", "")
+            if not role:
+                return jsonify({"error": "Role is required"}), 400
+            vault_manager.set_member_role(vault_name, user_id, role)
+            return jsonify({"success": True, "message": f"Role updated to {role}"})
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
+def _register_vault_audit_routes(app, vault_manager, require_auth):
+    """Register vault audit and identity endpoints."""
+
+    @app.route("/api/vaults/<vault_name>/audit", methods=["GET"])
+    @require_auth
+    def vault_audit_log(vault_name):
+        try:
+            limit = request.args.get("limit", 50, type=int)
+            entries = vault_manager.get_audit_log(vault_name, limit=limit)
+            # Enrich with formatted timestamps
+            for e in entries:
+                if e.get("timestamp"):
+                    e["timestamp_formatted"] = datetime.fromtimestamp(e["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+            return jsonify({"entries": entries})
+        except (PermissionError, ValueError) as e:
+            return jsonify({"error": str(e)}), 403
+        except Exception as e:
+            logger.error(f"Error getting audit log: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/vaults/<vault_name>/identity", methods=["GET"])
+    @require_auth
+    def vault_identity(vault_name):
+        """Return the current user's identity and role in this vault."""
+        identity = get_user_identity()
+        if not identity:
+            return jsonify({"error": "No team identity set"}), 400
+        members = vault_manager.list_members(vault_name)
+        my_role = None
+        for m in members:
+            if m["user_id"] == identity["user_id"]:
+                my_role = m["role"]
+                break
+        return jsonify(
+            {
+                "user_id": identity["user_id"],
+                "user_name": identity["user_name"],
+                "role": my_role,
+            }
+        )
