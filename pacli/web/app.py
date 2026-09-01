@@ -103,6 +103,19 @@ def _serialize_secret_row(secret_row):
     }
 
 
+def _serialize_vault_secret_row(s):
+    return {
+        "id": s[0],
+        "label": s[1],
+        "type": s[2],
+        "created_by": s[3],
+        "creation_time": s[4],
+        "update_time": s[5],
+        "creation_date": datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M") if s[4] else "",
+        "update_date": datetime.fromtimestamp(s[5]).strftime("%Y-%m-%d %H:%M") if s[5] else "",
+    }
+
+
 def _register_page_routes(app):
     @app.route("/", methods=["GET"])
     def index():
@@ -765,35 +778,28 @@ def _register_vault_crud_routes(app, store, vault_manager, require_auth):
 
 def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
     """Register vault secrets endpoints."""
+    _register_list_vault_secrets_route(app, vault_manager, require_auth)
+    _register_create_vault_secret_route(app, store, vault_manager, require_auth)
+    _register_reveal_vault_secret_route(app, store, vault_manager, require_auth)
+    _register_update_vault_secret_route(app, store, vault_manager, require_auth)
+    _register_delete_vault_secret_route(app, vault_manager, require_auth)
 
+
+def _register_list_vault_secrets_route(app, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/secrets", methods=["GET"])
     @require_auth
     def list_vault_secrets(vault_name):
         try:
             secrets = vault_manager.list_secrets(vault_name)
-            return jsonify(
-                {
-                    "secrets": [
-                        {
-                            "id": s[0],
-                            "label": s[1],
-                            "type": s[2],
-                            "created_by": s[3],
-                            "creation_time": s[4],
-                            "update_time": s[5],
-                            "creation_date": (datetime.fromtimestamp(s[4]).strftime("%Y-%m-%d %H:%M") if s[4] else ""),
-                            "update_date": (datetime.fromtimestamp(s[5]).strftime("%Y-%m-%d %H:%M") if s[5] else ""),
-                        }
-                        for s in secrets
-                    ]
-                }
-            )
+            return jsonify({"secrets": [_serialize_vault_secret_row(s) for s in secrets]})
         except (PermissionError, ValueError) as e:
             return jsonify({"error": str(e)}), 403
         except Exception as e:
             logger.error(f"Error listing vault secrets: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_create_vault_secret_route(app, store, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/secrets", methods=["POST"])
     @require_auth
     def create_vault_secret(vault_name):
@@ -814,6 +820,8 @@ def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
             logger.error(f"Error creating vault secret: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_reveal_vault_secret_route(app, store, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/secrets/<secret_id>/reveal", methods=["GET"])
     @require_auth
     def reveal_vault_secret(vault_name, secret_id):
@@ -834,6 +842,8 @@ def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
             logger.error(f"Error revealing vault secret: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_update_vault_secret_route(app, store, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/secrets/<secret_id>", methods=["PUT"])
     @require_auth
     def update_vault_secret(vault_name, secret_id):
@@ -850,6 +860,8 @@ def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
             logger.error(f"Error updating vault secret: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_delete_vault_secret_route(app, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/secrets/<secret_id>", methods=["DELETE"])
     @require_auth
     def delete_vault_secret(vault_name, secret_id):
@@ -865,7 +877,13 @@ def _register_vault_secrets_routes(app, store, vault_manager, require_auth):
 
 def _register_vault_members_routes(app, store, vault_manager, require_auth):
     """Register vault member management endpoints."""
+    _register_list_vault_members_route(app, vault_manager, require_auth)
+    _register_add_vault_member_route(app, store, vault_manager, require_auth)
+    _register_remove_vault_member_route(app, vault_manager, require_auth)
+    _register_set_vault_member_role_route(app, vault_manager, require_auth)
 
+
+def _register_list_vault_members_route(app, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/members", methods=["GET"])
     @require_auth
     def list_vault_members(vault_name):
@@ -879,6 +897,8 @@ def _register_vault_members_routes(app, store, vault_manager, require_auth):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+
+def _register_add_vault_member_route(app, store, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/members", methods=["POST"])
     @require_auth
     def add_vault_member(vault_name):
@@ -897,6 +917,8 @@ def _register_vault_members_routes(app, store, vault_manager, require_auth):
             logger.error(f"Error adding vault member: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+def _register_remove_vault_member_route(app, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/members/<user_id>", methods=["DELETE"])
     @require_auth
     def remove_vault_member(vault_name, user_id):
@@ -908,6 +930,8 @@ def _register_vault_members_routes(app, store, vault_manager, require_auth):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+
+def _register_set_vault_member_role_route(app, vault_manager, require_auth):
     @app.route("/api/vaults/<vault_name>/members/<user_id>/role", methods=["PUT"])
     @require_auth
     def set_vault_member_role(vault_name, user_id):
