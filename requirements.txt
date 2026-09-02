@@ -31,7 +31,7 @@ license-expression==30.4.4
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
-more-itertools==11.0.2
+more-itertools==11.1.0
 msgpack==1.1.2
 nh3==0.3.5
 packageurl-python==0.17.6
