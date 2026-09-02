@@ -29,7 +29,7 @@ dependencies = [
     "certifi==2026.4.22",
     "cffi==2.0.0",
     "charset-normalizer==3.4.7",
-    "cyclonedx-python-lib==11.7.0",
+    "cyclonedx-python-lib==11.12.0",
     "defusedxml==0.7.1",
     "docutils==0.22.4",
     "filelock==3.29.0",
