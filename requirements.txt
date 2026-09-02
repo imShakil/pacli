@@ -40,7 +40,7 @@ paramiko==4.0.0
 pip-api==0.0.34
 pip-requirements-parser==32.0.1
 pip_audit==2.10.0
-platformdirs==4.9.6
+platformdirs==4.11.5
 py-serializable==2.1.0
 pycparser==3.0
 Pygments==2.20.0
