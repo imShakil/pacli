@@ -59,7 +59,7 @@ dependencies = [
     "platformdirs==4.9.6",
     "py-serializable==2.1.0",
     "pycparser==3.0",
-    "pygments==2.20.0",
+    "pygments==2.21.0",
     "pynacl==1.6.2",
     "pyparsing==3.3.2",
     "pyproject-hooks==1.2.0",
