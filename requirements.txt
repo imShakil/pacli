@@ -24,7 +24,7 @@ invoke==3.0.3
 itsdangerous==2.2.0
 jaraco.classes==3.4.0
 jaraco.context==6.1.2
-jaraco.functools==4.4.0
+jaraco.functools==4.6.0
 Jinja2==3.1.6
 keyring==25.7.0
 license-expression==30.4.4
